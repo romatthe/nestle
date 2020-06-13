@@ -1,3 +1,5 @@
+use crate::cpu;
+use crate::cpu::opcodes::{AddressingMode, Mnemonic};
 use crate::cpu::Cpu;
 
 pub struct Rom {
@@ -15,7 +17,7 @@ impl Console {
         Console {
             cpu: Cpu::new(),
             ram: [0; 2048],
-            rom
+            rom,
         }
     }
 
@@ -60,5 +62,65 @@ impl Console {
                 unimplemented!("Read from ${:04X}", addr);
             }
         }
+    }
+
+    fn step(&mut self) {
+        let opcode = self.read_u8(self.cpu.pc);
+        let mnemonic = &cpu::opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
+
+        let address = match &cpu::opcodes::INSTRUCTION_MODES[opcode as usize] {
+            // Absolute addressing
+            AddressingMode::ABS => self.read_u16(self.cpu.pc + 1),
+            // Indexed Absolute X addressing
+            AddressingMode::ABX => {
+                self.read_u16(self.cpu.pc.wrapping_add(1)) + (self.cpu.regs.x as u16)
+            }
+            // Indexed Absolute Y addressing
+            AddressingMode::ABY => {
+                self.read_u16(self.cpu.pc.wrapping_add(1)) + (self.cpu.regs.y as u16)
+            }
+            // Accumulator addressing
+            AddressingMode::ACC => 0,
+            // Immediate addressing
+            AddressingMode::IMM => self.cpu.pc.wrapping_add(1),
+            // Implied addressing
+            AddressingMode::IMP => 0,
+            // Indexed Indirect addressing
+            AddressingMode::IDX => self.read_u16(
+                self.read_u8(self.cpu.pc.wrapping_add(1)) as u16 + self.cpu.regs.x as u16,
+            ),
+            // Indirect addressing
+            AddressingMode::IND => self.read_u16(self.read_u16(self.cpu.pc.wrapping_add(1))),
+            // Indirect Indexed addressing
+            AddressingMode::IDY => self.read_u16(
+                self.read_u8(self.cpu.pc.wrapping_add(1)) as u16 + self.cpu.regs.y as u16,
+            ),
+            // Relative addressing
+            AddressingMode::REL => {
+                let offset = self.read_u8(self.cpu.pc.wrapping_add(1)) as u16;
+                if offset < 0x80 {
+                    self.cpu.pc + 2 + offset
+                } else {
+                    self.cpu.pc + 2 + offset - 0x100
+                }
+            }
+            // Zero Page addressing
+            AddressingMode::ZPG => self.read_u8(self.cpu.pc.wrapping_add(1)) as u16,
+            // Indexed Zero Page X addressing
+            AddressingMode::ZPX => {
+                ((self.read_u8(self.cpu.pc.wrapping_add(1)) + self.cpu.regs.x) as u16) & 0xff
+            }
+            // Indexed Zero Page Y addressing
+            AddressingMode::ZPY => {
+                ((self.read_u8(self.cpu.pc.wrapping_add(1)) + self.cpu.regs.y) as u16) & 0xff
+            }
+            // Unknown
+            _ => panic!(
+                "Unknown addressing mode encountered for opcode: ${:04X}",
+                opcode
+            ),
+        };
+
+        self.cpu.exec(mnemonic);
     }
 }

@@ -1,4 +1,6 @@
-mod opcodes;
+use crate::cpu::opcodes::Mnemonic;
+
+pub mod opcodes;
 
 // Structure representing the Status Register
 // Some notes on the status register
@@ -15,7 +17,7 @@ mod opcodes;
 // |+-------- Overflow: 1 if last ADC or SBC resulted in signed overflow, or D6 from last BIT
 // +--------- Negative: Set to bit 7 of the last operation
 bitflags::bitflags! {
-    struct StatusRegister: u8 {
+    pub struct StatusRegister: u8 {
         const C = 0b0000_0001;  // Carry
         const Z = 0b0000_0010;  // Zero
         const I = 0b0000_0100;  // Interrupt
@@ -31,15 +33,15 @@ impl StatusRegister {
     }
 }
 
-struct Registers {
+pub struct Registers {
     /// Accumulator
-    a: u8,
+    pub a: u8,
     /// X register
-    x: u8,
+    pub x: u8,
     /// Y register
-    y: u8,
+    pub y: u8,
     /// Bitfield status register
-    status: StatusRegister,
+    pub status: StatusRegister,
 }
 
 impl Registers {
@@ -55,11 +57,11 @@ impl Registers {
 
 pub struct Cpu {
     /// Program counter
-    pc: u16,
+    pub pc: u16,
     /// Stack pointer
-    sp: u8,
+    pub sp: u8,
     /// Registers
-    regs: Registers,
+    pub regs: Registers,
 }
 
 impl Cpu {
@@ -68,6 +70,12 @@ impl Cpu {
             pc: 0,
             sp: 0xfd,
             regs: Registers::new(),
+        }
+    }
+
+    pub fn exec(&mut self, op: &Mnemonic) {
+        match op {
+            LDA => {}
         }
     }
 }
