@@ -19,7 +19,7 @@ impl Console {
         }
     }
 
-    pub fn read_u8(&self, addr: u16) -> u8 {
+    fn read_u8(&self, addr: u16) -> u8 {
         match addr {
             // Read from RAM (mirrored every 0x0800 bytes)
             0x0000..=0x07FF => {
@@ -38,10 +38,27 @@ impl Console {
         }
     }
 
-    pub fn read_u16(&self, addr: u16) -> u16 {
+    fn read_u16(&self, addr: u16) -> u16 {
         let low = self.read_u8(addr);
         let high = self.read_u8(addr.wrapping_add(1));
 
         (low as u16) | ((high as u16) << 8)
+    }
+
+    fn write_u8(&mut self, addr: u16, value: u8) {
+        match addr {
+            // Write to RAM (mirrored every 0x0800 bytes)
+            0x0000..=0x07FF => {
+                let ram_offset = (addr as usize) % self.ram.len();
+                self.ram[ram_offset] = value;
+            }
+            // Write to PRG-ROM (mirrored to fill all 32 KiB)
+            0x0800..=0xFFF => {
+                // Writes are ignored
+            }
+            _ => {
+                unimplemented!("Read from ${:04X}", addr);
+            }
+        }
     }
 }
