@@ -1,7 +1,7 @@
-use crate::opcodes::AddressingMode::{
+use crate::cpu::opcodes::AddressingMode::{
     ABS, ABX, ABY, ACC, IDX, IDY, IMM, IMP, IND, REL, ZPG, ZPX, ZPY,
 };
-use crate::opcodes::Mnemonic::{
+use crate::cpu::opcodes::Mnemonic::{
     ADC, AHX, ALR, ANC, AND, ARR, ASL, AXS, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
     CLD, CLI, CLV, CMP, CPX, CPY, DCP, DEC, DEX, DEY, EOR, INC, INX, INY, ISC, JMP, JSR, KIL, LAS,
     LAX, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, RLA, ROL, ROR, RRA, RTI, RTS, SAX, SBC,

@@ -1,5 +1,8 @@
-mod opcodes;
+use crate::console::Console;
+
+mod console;
+mod cpu;
 
 fn main() {
-    println!("Hello, world!");
+
 }
