@@ -103,6 +103,7 @@ pub const INSTRUCTION_MNEMONIC: [Mnemonic; 256] = [
 ];
 
 #[rustfmt::skip]
+#[derive(PartialEq)]
 pub enum AddressingMode {
     ABS,        // Absolute             Operand is an address and and both bytes are used,           ex: LDA $16A0
     ABX,        // Indexed Absolute X   Operand is 2-byte address, X register is added to it         eg: STA $1000,X
