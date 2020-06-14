@@ -66,6 +66,20 @@ impl Registers {
         regs
     }
 
+    /// Returns the processor status flags
+    fn get_flags(&self) -> u8 {
+        let mut flags: u8 = 0;
+        flags |= self.c << 0;
+        flags |= self.z << 1;
+        flags |= self.i << 2;
+        flags |= self.d << 3;
+        flags |= self.b << 4;
+        flags |= self.v << 6;
+        flags |= self.n << 7;
+
+        flags
+    }
+
     fn set_flags(&mut self, flags: u8) {
         self.c = (flags >> 0) & 1;
         self.z = (flags >> 1) & 1;
@@ -117,6 +131,17 @@ impl Cpu {
             regs: Registers::new(),
             bus: Bus::new(),
         }
+    }
+
+    fn push_u8(&mut self, value: u8) {
+        let address = 0x100 + self.sp as u16;
+        self.bus.write_u8(address, value);
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    fn push_u16(&mut self, value: u16) {
+        self.push_u8((value >> 8) as u8);
+        self.push_u8(value as u8);
     }
 
     pub fn step(&mut self) {
@@ -186,14 +211,29 @@ impl Cpu {
         match mnemonic {
             Mnemonic::ADC => self.adc(mode),
             Mnemonic::AND => self.and(mode),
+            Mnemonic::BCC => self.bcc(mode),
+            Mnemonic::BCS => self.bcs(mode),
+            Mnemonic::BEQ => self.beq(mode),
+            Mnemonic::BIT => self.bit(mode),
+            Mnemonic::BMI => self.bmi(mode),
+            Mnemonic::BNE => self.bne(mode),
+            Mnemonic::BPL => self.bpl(mode),
+            Mnemonic::BRK => self.brk(mode),
+            Mnemonic::BVC => self.bvc(mode),
+            Mnemonic::BVS => self.bvs(mode),
+            Mnemonic::CLC => self.clc(),
+            Mnemonic::CLD => self.cld(),
+            Mnemonic::CLI => self.cli(),
+            Mnemonic::CLV => self.clv(),
             Mnemonic::LDA => self.lda(mode),
-
+            Mnemonic::PHP => self.php(mode),
+            Mnemonic::SEI => self.sei(mode),
             _ => {}
         }
     }
 
     /// Add with carry
-    pub fn adc(&mut self, mode: &AddressingMode) {
+    fn adc(&mut self, mode: &AddressingMode) {
         let address = self.get_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
@@ -217,7 +257,7 @@ impl Cpu {
     }
 
     /// Logical AND
-    pub fn and(&mut self, mode: &AddressingMode) {
+    fn and(&mut self, mode: &AddressingMode) {
         let address = self.get_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
@@ -226,7 +266,7 @@ impl Cpu {
     }
 
     /// Arithmetic Shift Left
-    pub fn asl(&mut self, mode: &AddressingMode) {
+    fn asl(&mut self, mode: &AddressingMode) {
         if *mode == AddressingMode::ACC {
             self.regs.c = (self.regs.a >> 7) & 1;
             self.regs.a <<= 1;
@@ -242,11 +282,115 @@ impl Cpu {
         }
     }
 
+    /// Branch if carry clear
+    fn bcc(&mut self, mode: &AddressingMode) {
+        if self.regs.c == 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Branch if carry set
+    fn bcs(&mut self, mode: &AddressingMode) {
+        if self.regs.c != 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Branch if equal
+    fn beq(&mut self, mode: &AddressingMode) {
+        if self.regs.z != 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Bit test
+    fn bit(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.regs.v = (operand >> 6) & 1;
+        self.regs.set_z(operand & self.regs.a);
+        self.regs.set_n(operand);
+    }
+
+    /// Branch if minus
+    fn bmi(&mut self, mode: &AddressingMode) {
+        if self.regs.n != 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Branch if not equal
+    fn bne(&mut self, mode: &AddressingMode) {
+        if self.regs.z == 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Branch if positive
+    fn bpl(&mut self, mode: &AddressingMode) {
+        if self.regs.n == 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Force interrupt
+    fn brk(&mut self, mode: &AddressingMode) {
+        self.push_u16(self.pc);
+        self.php(mode);
+        self.sei(mode);
+        self.pc = self.bus.read_u16(0xFFFE);
+    }
+
+    /// Branch if overflow clear
+    fn bvc(&mut self, mode: &AddressingMode) {
+        if self.regs.v == 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Branch if overflow set
+    fn bvs(&mut self, mode: &AddressingMode) {
+        if self.regs.v != 0 {
+            self.pc = self.get_operand_address(mode);
+        }
+    }
+
+    /// Clear Carry Flag
+    fn clc(&mut self) {
+        self.regs.c = 0;
+    }
+
+    /// Clear decimal mode
+    fn cld(&mut self) {
+        self.regs.d = 0;
+    }
+
+    /// Clear interrupt disable
+    fn cli(&mut self) {
+        self.regs.i = 0;
+    }
+
+    /// Clear overflow flag
+    fn clv(&mut self) {
+        self.regs.v = 0;
+    }
+
     /// Load accumulator
-    pub fn lda(&mut self, mode: &AddressingMode) {
+    fn lda(&mut self, mode: &AddressingMode) {
         let address = self.get_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.a = operand;
+    }
+
+    /// Push processor status
+    fn php(&mut self, mode: &AddressingMode) {
+        self.push_u8(self.regs.get_flags() | 0x10);
+    }
+
+    /// Set interrupt disable
+    fn sei(&mut self, mode: &AddressingMode) {
+        self.regs.i = 1;
     }
 }
