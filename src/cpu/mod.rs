@@ -133,22 +133,26 @@ impl Cpu {
         }
     }
 
+    /// Push a byte unto the stack
     fn push_u8(&mut self, value: u8) {
         let address = 0x100 + self.sp as u16;
         self.bus.write_u8(address, value);
         self.sp = self.sp.wrapping_sub(1);
     }
 
+    /// Push two bytes unto the stack
     fn push_u16(&mut self, value: u16) {
         self.push_u8((value >> 8) as u8);
         self.push_u8(value as u8);
     }
 
+    /// Pop a byte off the stack
     fn pop_u8(&mut self) -> u8 {
         self.sp += 1;
         self.bus.read_u8(0x100 | (self.sp as u16))
     }
 
+    /// Pop two bytes off the stack
     fn pop_u16(&mut self) -> u16 {
         let low = self.pop_u8() as u16;
         let high = self.pop_u8() as u16;
@@ -166,6 +170,7 @@ impl Cpu {
         self.exec(opcode, mnemonic, mode);
     }
 
+    /// Get the address of the next operand based on the addressing mode
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
         match mode {
             // Absolute addressing
@@ -218,6 +223,7 @@ impl Cpu {
         }
     }
 
+    /// Execute an instruction in the current CPU state
     fn exec(&mut self, opcode: u8, mnemonic: &Mnemonic, mode: &AddressingMode) {
         match mnemonic {
             Mnemonic::ADC => self.adc(mode),
@@ -255,9 +261,9 @@ impl Cpu {
             Mnemonic::NOP => self.nop(),
             Mnemonic::ORA => self.ora(mode),
             Mnemonic::PHA => self.pha(),
-            Mnemonic::PHP => self.php(mode),
-            Mnemonic::PLA => self.pla(mode),
-            Mnemonic::PLP => self.plp(mode),
+            Mnemonic::PHP => self.php(),
+            Mnemonic::PLA => self.pla(),
+            Mnemonic::PLP => self.plp(),
             Mnemonic::ROL => self.rol(mode),
             Mnemonic::ROR => self.ror(mode),
             Mnemonic::RTI => self.rti(),
@@ -567,20 +573,19 @@ impl Cpu {
         self.push_u8(self.regs.a)
     }
 
-
     /// Push processor status
-    fn php(&mut self, mode: &AddressingMode) {
+    fn php(&mut self) {
         self.push_u8(self.regs.get_flags() | 0x10);
     }
 
     /// Pull Accumulator
-    fn pla(&mut self, mode: &AddressingMode) {
+    fn pla(&mut self) {
         self.regs.a = self.pop_u8();
         self.regs.set_zn(self.regs.a);
     }
 
     /// Pull processor status
-    fn plp(&mut self, mode: &AddressingMode) {
+    fn plp(&mut self) {
         let results = self.pop_u8() & 0xEF | 0x20;
         self.regs.set_flags(results);
     }
