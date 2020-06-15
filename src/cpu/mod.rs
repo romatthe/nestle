@@ -144,6 +144,17 @@ impl Cpu {
         self.push_u8(value as u8);
     }
 
+    fn pop_u8(&mut self) -> u8 {
+        self.sp += 1;
+        self.bus.read_u8(0x100 | (self.sp as u16))
+    }
+
+    fn pop_u16(&mut self) -> u16 {
+        let low = self.pop_u8() as u16;
+        let high = self.pop_u8() as u16;
+        high <<8 | low
+    }
+
     pub fn step(&mut self) {
         let opcode = self.bus.read_u8(self.pc);
         let mode = &opcodes::INSTRUCTION_MODES[opcode as usize];
@@ -226,17 +237,31 @@ impl Cpu {
             Mnemonic::CLI => self.cli(),
             Mnemonic::CLV => self.clv(),
             Mnemonic::CMP => self.cmp(mode),
-            Mnemonic::CPX => self.cmx(mode),
-            Mnemonic::CPY => self.cmy(mode),
+            Mnemonic::CPX => self.cpx(mode),
+            Mnemonic::CPY => self.cpy(mode),
             Mnemonic::DEC => self.dec(mode),
-            Mnemonic::DEX => self.dex(mode),
-            Mnemonic::DEY => self.dey(mode),
+            Mnemonic::DEX => self.dex(),
+            Mnemonic::DEY => self.dey(),
             Mnemonic::EOR => self.eor(mode),
             Mnemonic::INC => self.inc(mode),
             Mnemonic::INX => self.inx(),
             Mnemonic::INY => self.iny(),
+            Mnemonic::JMP => self.jmp(mode),
+            Mnemonic::JSR => self.jsr(mode),
             Mnemonic::LDA => self.lda(mode),
+            Mnemonic::LDX => self.ldx(mode),
+            Mnemonic::LDY => self.ldy(mode),
+            Mnemonic::LSR => self.lsr(mode),
+            Mnemonic::NOP => self.nop(),
+            Mnemonic::ORA => self.ora(mode),
+            Mnemonic::PHA => self.pha(),
             Mnemonic::PHP => self.php(mode),
+            Mnemonic::PLA => self.pla(mode),
+            Mnemonic::PLP => self.plp(mode),
+            Mnemonic::ROL => self.rol(mode),
+            Mnemonic::ROR => self.ror(mode),
+            Mnemonic::RTI => self.rti(),
+            Mnemonic::RTS => self.rts(),
             Mnemonic::SEI => self.sei(mode),
             _ => {}
         }
@@ -429,13 +454,13 @@ impl Cpu {
     }
 
     /// Decrement x register
-    fn dex(&mut self, mode: &AddressingMode) {
+    fn dex(&mut self) {
         self.regs.x -= 1;
         self.regs.set_zn(self.regs.x);
     }
 
     /// Decrement y register
-    fn dey(&mut self, mode: &AddressingMode) {
+    fn dey(&mut self) {
         self.regs.y -= 1;
         self.regs.set_zn(self.regs.y);
     }
@@ -470,6 +495,17 @@ impl Cpu {
         self.regs.set_zn(self.regs.y);
     }
 
+    /// Jump
+    fn jmp(&mut self, mode: &AddressingMode) {
+        self.pc = self.get_operand_address(mode);
+    }
+
+    /// Jump to subroutine
+    fn jsr(&mut self, mode: &AddressingMode) {
+        self.push_u16(self.pc - 1);
+        self.pc = self.get_operand_address(mode);
+    }
+
     /// Load accumulator
     fn lda(&mut self, mode: &AddressingMode) {
         let address = self.get_operand_address(mode);
@@ -478,9 +514,124 @@ impl Cpu {
         self.regs.a = operand;
     }
 
+    /// Load y register
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.regs.x = operand;
+        self.regs.set_zn(self.regs.x);
+    }
+
+    /// Load y register
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.regs.y = operand;
+        self.regs.set_zn(self.regs.y);
+    }
+
+    /// Logical shift right
+    fn lsr(&mut self, mode: &AddressingMode) {
+        if *mode == AddressingMode::ACC {
+            self.regs.c = self.regs.a & 1;
+            self.regs.a >>= 1;
+            self.regs.set_zn(self.regs.a);
+        } else {
+            let address = self.get_operand_address(mode);
+            let mut operand = self.bus.read_u8(address);
+
+            self.regs.c = operand & 1;
+            operand >>= 1;
+
+            self.bus.write_u8(address, operand);
+            self.regs.set_zn(operand);
+        }
+    }
+
+    /// No operation
+    fn nop(&self) {
+
+    }
+
+    /// Logical inclusive or
+    fn ora(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        self.regs.a = self.regs.a | self.bus.read_u8(address);
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Push Accumulator
+    fn pha(&mut self) {
+        self.push_u8(self.regs.a)
+    }
+
+
     /// Push processor status
     fn php(&mut self, mode: &AddressingMode) {
         self.push_u8(self.regs.get_flags() | 0x10);
+    }
+
+    /// Pull Accumulator
+    fn pla(&mut self, mode: &AddressingMode) {
+        self.regs.a = self.pop_u8();
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Pull processor status
+    fn plp(&mut self, mode: &AddressingMode) {
+        let results = self.pop_u8() & 0xEF | 0x20;
+        self.regs.set_flags(results);
+    }
+
+    /// Rotate left
+    fn rol(&mut self, mode: &AddressingMode) {
+        let c = self.regs.c;
+
+        if *mode == AddressingMode::ACC {
+            self.regs.c = (self.regs.a >> 7) & 1;
+            self.regs.a = (self.regs.a << 1) | c;
+            self.regs.set_zn(self.regs.a);
+        } else {
+            let address = self.get_operand_address(mode);
+            let mut operand = self.bus.read_u8(address);
+
+            self.regs.c = (operand >> 7) & 1;
+            operand = (operand << 1) | c;
+            self.bus.write_u8(address, operand);
+            self.regs.set_zn(operand);
+        }
+    }
+
+    /// Rotate right
+    fn ror(&mut self, mode: &AddressingMode) {
+        let c = self.regs.c;
+
+        if *mode == AddressingMode::ACC {
+            self.regs.c = self.regs.a  & 1;
+            self.regs.a = (self.regs.a >> 1) | (c << 7);
+            self.regs.set_zn(self.regs.a);
+        } else {
+            let address = self.get_operand_address(mode);
+            let mut operand = self.bus.read_u8(address);
+
+            operand = (operand >> 1) | (c << 7);
+            self.bus.write_u8(address, operand);
+            self.regs.set_zn(operand);
+        }
+    }
+
+    /// Return from interrupt
+    fn rti(&mut self) {
+        let result = self.pop_u8() & 0xEF | 0x20;
+        self.regs.set_flags(result);
+        self.pc = self.pop_u16();
+    }
+
+    /// Return from subroutine
+    fn rts(&mut self) {
+        self.pc = self.pop_u16() + 1;
     }
 
     /// Set interrupt disable
