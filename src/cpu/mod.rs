@@ -225,10 +225,29 @@ impl Cpu {
             Mnemonic::CLD => self.cld(),
             Mnemonic::CLI => self.cli(),
             Mnemonic::CLV => self.clv(),
+            Mnemonic::CMP => self.cmp(mode),
+            Mnemonic::CPX => self.cmx(mode),
+            Mnemonic::CPY => self.cmy(mode),
+            Mnemonic::DEC => self.dec(mode),
+            Mnemonic::DEX => self.dex(mode),
+            Mnemonic::DEY => self.dey(mode),
+            Mnemonic::EOR => self.eor(mode),
+            Mnemonic::INC => self.inc(mode),
+            Mnemonic::INX => self.inx(),
+            Mnemonic::INY => self.iny(),
             Mnemonic::LDA => self.lda(mode),
             Mnemonic::PHP => self.php(mode),
             Mnemonic::SEI => self.sei(mode),
             _ => {}
+        }
+    }
+
+    fn compare(&mut self, a: u8, b: u8) {
+        self.regs.set_zn(a - b);
+        if a >= b {
+            self.regs.c = 1;
+        } else {
+            self.regs.c = 0;
         }
     }
 
@@ -374,6 +393,81 @@ impl Cpu {
     /// Clear overflow flag
     fn clv(&mut self) {
         self.regs.v = 0;
+    }
+
+    // Compare
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.compare(self.regs.a, operand);
+    }
+
+    /// Compare X Register
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.compare(self.regs.x, operand);
+    }
+
+    /// Compare X Register
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.compare(self.regs.y, operand);
+    }
+
+    /// Decrement memory
+    fn dec(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.bus.write_u8(address, operand);
+        self.regs.set_zn(operand);
+    }
+
+    /// Decrement x register
+    fn dex(&mut self, mode: &AddressingMode) {
+        self.regs.x -= 1;
+        self.regs.set_zn(self.regs.x);
+    }
+
+    /// Decrement y register
+    fn dey(&mut self, mode: &AddressingMode) {
+        self.regs.y -= 1;
+        self.regs.set_zn(self.regs.y);
+    }
+
+    /// Exclusive or
+    fn eor(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        self.regs.a = self.regs.a ^ operand;
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Increment memory
+    fn inc(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address) + 1;
+
+        self.bus.write_u8(address, operand);
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Increment x register
+    fn inx(&mut self) {
+        self.regs.x += 1;
+        self.regs.set_zn(self.regs.x);
+    }
+
+    /// Increment y register
+    fn iny(&mut self) {
+        self.regs.y += 1;
+        self.regs.set_zn(self.regs.y);
     }
 
     /// Load accumulator
