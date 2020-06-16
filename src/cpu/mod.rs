@@ -1,5 +1,6 @@
 use crate::cpu::opcodes::{Mnemonic, AddressingMode};
 use crate::cpu::bus::Bus;
+use log::warn;
 
 pub mod bus;
 pub mod opcodes;
@@ -227,6 +228,7 @@ impl Cpu {
     fn exec(&mut self, opcode: u8, mnemonic: &Mnemonic, mode: &AddressingMode) {
         match mnemonic {
             Mnemonic::ADC => self.adc(mode),
+            Mnemonic::ASL => self.asl(mode),
             Mnemonic::AND => self.and(mode),
             Mnemonic::BCC => self.bcc(mode),
             Mnemonic::BCS => self.bcs(mode),
@@ -268,8 +270,43 @@ impl Cpu {
             Mnemonic::ROR => self.ror(mode),
             Mnemonic::RTI => self.rti(),
             Mnemonic::RTS => self.rts(),
+            Mnemonic::SBC => self.sbc(mode),
+            Mnemonic::SEC => self.sec(),
+            Mnemonic::SED => self.sed(),
             Mnemonic::SEI => self.sei(mode),
-            _ => {}
+            Mnemonic::STA => self.sta(mode),
+            Mnemonic::STX => self.stx(mode),
+            Mnemonic::STY => self.sty(mode),
+            Mnemonic::TAX => self.tax(),
+            Mnemonic::TAY => self.tay(),
+            Mnemonic::TSX => self.tsx(),
+            Mnemonic::TXA => self.txa(),
+            Mnemonic::TXS => self.txs(),
+            Mnemonic::TYA => self.tya(),
+
+            // Illegal opcodes
+            Mnemonic::AHX => self.ahx(),
+            Mnemonic::ALR => self.alr(),
+            Mnemonic::ANC => self.anc(),
+            Mnemonic::ARR => self.arr(),
+            Mnemonic::AXS => self.axs(),
+            Mnemonic::DCP => self.dcp(),
+            Mnemonic::ISC => self.isc(),
+            Mnemonic::KIL => self.kil(),
+            Mnemonic::LAS => self.las(),
+            Mnemonic::LAX => self.lax(),
+            Mnemonic::RLA => self.rla(),
+            Mnemonic::RRA => self.rra(),
+            Mnemonic::SAX => self.sax(),
+            Mnemonic::SHX => self.shx(),
+            Mnemonic::SHY => self.shy(),
+            Mnemonic::SLO => self.slo(),
+            Mnemonic::SRE => self.sre(),
+            Mnemonic::TAS => self.tas(),
+            Mnemonic::XAA => self.xaa(),
+
+            // Unknown
+            Mnemonic::UNKNOWN => panic!("Unknown opcode encountered: {:#X?}", opcode),
         }
     }
 
@@ -387,7 +424,7 @@ impl Cpu {
     /// Force interrupt
     fn brk(&mut self, mode: &AddressingMode) {
         self.push_u16(self.pc);
-        self.php(mode);
+        self.php();
         self.sei(mode);
         self.pc = self.bus.read_u16(0xFFFE);
     }
@@ -639,8 +676,190 @@ impl Cpu {
         self.pc = self.pop_u16() + 1;
     }
 
+    /// Subtract with Carry
+    fn sbc(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        let operand = self.bus.read_u8(address);
+
+        let a = self.regs.a;
+        let c = self.regs.c;
+
+        self.regs.a = a - operand - (1 - c);
+        self.regs.set_zn(self.regs.a);
+
+        if (a as i32) - (operand as i32) - (c as i32) >= 0 {
+            self.regs.c = 1;
+        } else {
+            self.regs.c = 0;
+        }
+
+        if (a ^ operand) & 0x80 != 0 && (a ^ self.regs.a) & 0x80 != 0 {
+            self.regs.v = 1;
+        } else {
+            self.regs.v = 0;
+        }
+    }
+
+    /// Set carry flag
+    fn sec(&mut self) {
+        self.regs.c = 1;
+    }
+
+    /// Set decimal flag
+    fn sed(&mut self) {
+        self.regs.d = 1;
+    }
+
     /// Set interrupt disable
     fn sei(&mut self, mode: &AddressingMode) {
         self.regs.i = 1;
+    }
+
+    /// Store accumulator
+    fn sta(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        self.bus.write_u8(address, self.regs.a);
+    }
+
+    /// Store the x register
+    fn stx(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        self.bus.write_u8(address, self.regs.x);
+    }
+
+    /// Store the y register
+    fn sty(&mut self, mode: &AddressingMode) {
+        let address = self.get_operand_address(mode);
+        self.bus.write_u8(address, self.regs.y);
+    }
+
+    /// Transfer accumulator to x
+    fn tax(&mut self) {
+        self.regs.x = self.regs.a;
+        self.regs.set_zn(self.regs.x);
+    }
+
+    /// Transfer accumulator to y
+    fn tay(&mut self) {
+        self.regs.y = self.regs.a;
+        self.regs.set_zn(self.regs.y);
+    }
+
+    /// Transfer stack pointer to x
+    fn tsx(&mut self) {
+        self.regs.x = self.sp;
+        self.regs.set_zn(self.regs.x);
+    }
+
+    /// Transfer X to Accumulator
+    fn txa(&mut self) {
+        self.regs.a = self.regs.x;
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Transfer x to stack pointer
+    fn txs(&mut self) {
+        self.sp = self.regs.x;
+    }
+
+    /// Transfer y to accumulator
+    fn tya(&mut self) {
+        self.regs.a = self.regs.y;
+        self.regs.set_zn(self.regs.a);
+    }
+
+    /// Illegal opcode: AHX
+    fn ahx(&self) {
+        warn!("Illegal opcode encountered: AXH")
+    }
+
+    /// Illegal opcode: ALR
+    fn alr(&self) {
+        warn!("Illegal opcode encountered: ALR")
+    }
+
+    /// Illegal opcode: ANC
+    fn anc(&self) {
+        warn!("Illegal opcode encountered: ANC")
+    }
+
+    /// Illegal opcode: ARR
+    fn arr(&self) {
+        warn!("Illegal opcode encountered: ARR")
+    }
+
+    /// Illegal opcode: AXS
+    fn axs(&self) {
+        warn!("Illegal opcode encountered: AXS")
+    }
+
+    /// Illegal opcode: DCP
+    fn dcp(&self) {
+        warn!("Illegal opcode encountered: DCP")
+    }
+
+    /// Illegal opcode: ISC
+    fn isc(&self) {
+        warn!("Illegal opcode encountered: ISC")
+    }
+
+    /// Illegal opcode: KIL
+    fn kil(&self) {
+        warn!("Illegal opcode encountered: KIL")
+    }
+
+    /// Illegal opcode: LAS
+    fn las(&self) {
+        warn!("Illegal opcode encountered: LAS")
+    }
+
+    /// Illegal opcode: LAX
+    fn lax(&self) {
+        warn!("Illegal opcode encountered: LAX")
+    }
+
+    /// Illegal opcode: RLA
+    fn rla(&self) {
+        warn!("Illegal opcode encountered: RLA")
+    }
+
+    /// Illegal opcode: RRA
+    fn rra(&self) {
+        warn!("Illegal opcode encountered: RRA")
+    }
+
+    /// Illegal opcode: SAX
+    fn sax(&self) {
+        warn!("Illegal opcode encountered: SAX")
+    }
+
+    /// Illegal opcode: SHX
+    fn shx(&self) {
+        warn!("Illegal opcode encountered: SHX")
+    }
+
+    /// Illegal opcode: SHY
+    fn shy(&self) {
+        warn!("Illegal opcode encountered: SHY")
+    }
+
+    /// Illegal opcode: SLO
+    fn slo(&self) {
+        warn!("Illegal opcode encountered: SLO")
+    }
+
+    /// Illegal opcode: SRE
+    fn sre(&self) {
+        warn!("Illegal opcode encountered: SRE")
+    }
+
+    /// Illegal opcode: TAS
+    fn tas(&self) {
+        warn!("Illegal opcode encountered: TAS")
+    }
+
+    /// Illegal opcode: XAA
+    fn xaa(&self) {
+        warn!("Illegal opcode encountered: XAA")
     }
 }
