@@ -149,7 +149,7 @@ impl Cpu {
 
     /// Pop a byte off the stack
     fn pop_u8(&mut self) -> u8 {
-        self.sp += 1;
+        self.sp = self.sp.wrapping_add(1);
         self.bus.read_u8(0x100 | (self.sp as u16))
     }
 
@@ -164,9 +164,6 @@ impl Cpu {
         let opcode = self.bus.read_u8(self.pc);
         let mode = &opcodes::INSTRUCTION_MODES[opcode as usize];
         let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
-
-        // let operand_address = self.operand_address(opcode, mode);
-        // let operand = self.bus.read_u8(operand_address);
 
         self.exec(opcode, mnemonic, mode);
     }
@@ -204,9 +201,9 @@ impl Cpu {
             AddressingMode::REL => {
                 let offset = self.bus.read_u8(self.pc.wrapping_add(1)) as u16;
                 if offset < 0x80 {
-                    self.pc + 2 + offset
+                    self.pc.wrapping_add(2 + offset)
                 } else {
-                    self.pc + 2 + offset - 0x100
+                    self.pc.wrapping_add(2 + offset - 0x100)
                 }
             }
             // Zero Page addressing
@@ -498,13 +495,13 @@ impl Cpu {
 
     /// Decrement x register
     fn dex(&mut self) {
-        self.regs.x -= 1;
+        self.regs.x = self.regs.x.wrapping_sub(1);
         self.regs.set_zn(self.regs.x);
     }
 
     /// Decrement y register
     fn dey(&mut self) {
-        self.regs.y -= 1;
+        self.regs.y = self.regs.y.wrapping_sub(1);
         self.regs.set_zn(self.regs.y);
     }
 
@@ -528,13 +525,13 @@ impl Cpu {
 
     /// Increment x register
     fn inx(&mut self) {
-        self.regs.x += 1;
+        self.regs.x = self.regs.x.wrapping_add(1);
         self.regs.set_zn(self.regs.x);
     }
 
     /// Increment y register
     fn iny(&mut self) {
-        self.regs.y += 1;
+        self.regs.y = self.regs.y.wrapping_add(1);
         self.regs.set_zn(self.regs.y);
     }
 
