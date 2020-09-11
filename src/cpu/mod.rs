@@ -169,7 +169,7 @@ impl Cpu {
     }
 
     /// Get the address of the next operand based on the addressing mode
-    fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
+    fn next_operand_address(&mut self, mode: &AddressingMode) -> u16 {
         match mode {
             // Absolute addressing
             AddressingMode::ABS => self.bus.read_u16(self.pc + 1),
@@ -318,7 +318,7 @@ impl Cpu {
 
     /// Add with carry
     fn adc(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         let a = self.regs.a;
@@ -342,7 +342,7 @@ impl Cpu {
 
     /// Logical AND
     fn and(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.a = self.regs.a & operand;
@@ -356,7 +356,7 @@ impl Cpu {
             self.regs.a <<= 1;
             self.regs.set_zn(self.regs.a);
         } else {
-            let address = self.get_operand_address(mode);
+            let address = self.next_operand_address(mode);
             let operand = self.bus.read_u8(address);
             let value = operand << 1;
 
@@ -369,27 +369,27 @@ impl Cpu {
     /// Branch if carry clear
     fn bcc(&mut self, mode: &AddressingMode) {
         if self.regs.c == 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Branch if carry set
     fn bcs(&mut self, mode: &AddressingMode) {
         if self.regs.c != 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Branch if equal
     fn beq(&mut self, mode: &AddressingMode) {
         if self.regs.z != 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Bit test
     fn bit(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.v = (operand >> 6) & 1;
@@ -400,21 +400,21 @@ impl Cpu {
     /// Branch if minus
     fn bmi(&mut self, mode: &AddressingMode) {
         if self.regs.n != 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Branch if not equal
     fn bne(&mut self, mode: &AddressingMode) {
         if self.regs.z == 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Branch if positive
     fn bpl(&mut self, mode: &AddressingMode) {
         if self.regs.n == 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
@@ -429,14 +429,14 @@ impl Cpu {
     /// Branch if overflow clear
     fn bvc(&mut self, mode: &AddressingMode) {
         if self.regs.v == 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
     /// Branch if overflow set
     fn bvs(&mut self, mode: &AddressingMode) {
         if self.regs.v != 0 {
-            self.pc = self.get_operand_address(mode);
+            self.pc = self.next_operand_address(mode);
         }
     }
 
@@ -462,7 +462,7 @@ impl Cpu {
 
     // Compare
     fn cmp(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.compare(self.regs.a, operand);
@@ -470,7 +470,7 @@ impl Cpu {
 
     /// Compare X Register
     fn cpx(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.compare(self.regs.x, operand);
@@ -478,7 +478,7 @@ impl Cpu {
 
     /// Compare X Register
     fn cpy(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.compare(self.regs.y, operand);
@@ -486,7 +486,7 @@ impl Cpu {
 
     /// Decrement memory
     fn dec(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.bus.write_u8(address, operand);
@@ -507,7 +507,7 @@ impl Cpu {
 
     /// Exclusive or
     fn eor(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.a = self.regs.a ^ operand;
@@ -516,7 +516,7 @@ impl Cpu {
 
     /// Increment memory
     fn inc(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address) + 1;
 
         self.bus.write_u8(address, operand);
@@ -537,18 +537,18 @@ impl Cpu {
 
     /// Jump
     fn jmp(&mut self, mode: &AddressingMode) {
-        self.pc = self.get_operand_address(mode);
+        self.pc = self.next_operand_address(mode);
     }
 
     /// Jump to subroutine
     fn jsr(&mut self, mode: &AddressingMode) {
         self.push_u16(self.pc - 1);
-        self.pc = self.get_operand_address(mode);
+        self.pc = self.next_operand_address(mode);
     }
 
     /// Load accumulator
     fn lda(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.a = operand;
@@ -556,7 +556,7 @@ impl Cpu {
 
     /// Load y register
     fn ldx(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.x = operand;
@@ -565,7 +565,7 @@ impl Cpu {
 
     /// Load y register
     fn ldy(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         self.regs.y = operand;
@@ -579,7 +579,7 @@ impl Cpu {
             self.regs.a >>= 1;
             self.regs.set_zn(self.regs.a);
         } else {
-            let address = self.get_operand_address(mode);
+            let address = self.next_operand_address(mode);
             let mut operand = self.bus.read_u8(address);
 
             self.regs.c = operand & 1;
@@ -597,7 +597,7 @@ impl Cpu {
 
     /// Logical inclusive or
     fn ora(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         self.regs.a = self.regs.a | self.bus.read_u8(address);
         self.regs.set_zn(self.regs.a);
     }
@@ -633,7 +633,7 @@ impl Cpu {
             self.regs.a = (self.regs.a << 1) | c;
             self.regs.set_zn(self.regs.a);
         } else {
-            let address = self.get_operand_address(mode);
+            let address = self.next_operand_address(mode);
             let mut operand = self.bus.read_u8(address);
 
             self.regs.c = (operand >> 7) & 1;
@@ -652,7 +652,7 @@ impl Cpu {
             self.regs.a = (self.regs.a >> 1) | (c << 7);
             self.regs.set_zn(self.regs.a);
         } else {
-            let address = self.get_operand_address(mode);
+            let address = self.next_operand_address(mode);
             let mut operand = self.bus.read_u8(address);
 
             operand = (operand >> 1) | (c << 7);
@@ -675,7 +675,7 @@ impl Cpu {
 
     /// Subtract with Carry
     fn sbc(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         let operand = self.bus.read_u8(address);
 
         let a = self.regs.a;
@@ -714,19 +714,19 @@ impl Cpu {
 
     /// Store accumulator
     fn sta(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         self.bus.write_u8(address, self.regs.a);
     }
 
     /// Store the x register
     fn stx(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         self.bus.write_u8(address, self.regs.x);
     }
 
     /// Store the y register
     fn sty(&mut self, mode: &AddressingMode) {
-        let address = self.get_operand_address(mode);
+        let address = self.next_operand_address(mode);
         self.bus.write_u8(address, self.regs.y);
     }
 
