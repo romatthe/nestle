@@ -7,3 +7,5 @@ edition = "2018"
 [dependencies]
 bitflags = "1.2.1"
 log = "0.4.8"
+rand = "0.7.3"
+sdl2 = { version = "0.34.3", features = ["bundled"] }
