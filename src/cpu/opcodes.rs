@@ -122,6 +122,7 @@ pub enum AddressingMode {
 }
 
 #[rustfmt::skip]
+#[derive(Debug, PartialEq)]
 pub enum Mnemonic {
     LDA, LDX, LDY, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,     // Storage
     ADC, DEC, DEX, DEY, INC, INX, INY, SBC,                         // Math

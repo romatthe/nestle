@@ -2,6 +2,8 @@ use crate::cpu::opcodes::{Mnemonic, AddressingMode, INSTRUCTION_SIZES};
 use crate::cpu::bus::Bus;
 use log::warn;
 use std::collections::HashMap;
+use std::fmt;
+use bitflags::_core::fmt::Formatter;
 
 pub mod bus;
 pub mod opcodes;
@@ -131,7 +133,9 @@ pub struct Cpu {
     /// RAM
     memory: [u8; 0xFFFF],
     /// CPU should exit when set to `false`
-    running: bool
+    running: bool,
+    /// Mark if branched, and if so, which address is being branched to
+    branched: Option<u16>,
 }
 
 impl Cpu {
@@ -141,7 +145,8 @@ impl Cpu {
             sp: STACK_RESET,
             regs: Registers::new(),
             memory: [0x0; 0xFFFF],
-            running: true
+            running: true,
+            branched: None,
         }
     }
 
@@ -150,12 +155,16 @@ impl Cpu {
         self.reset();
 
         while self.running {
-            let opcode = self.mem_read(self.pc);
-            let mode = &opcodes::INSTRUCTION_MODES[opcode as usize];
-            let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
-
-            self.exec(opcode, mnemonic, mode);
+            self.step();
         }
+    }
+
+    fn step(&mut self) {
+        let opcode = self.mem_read(self.pc);
+        let mode = &opcodes::INSTRUCTION_MODES[opcode as usize];
+        let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
+
+        self.exec(opcode, mnemonic, mode);
     }
 
     pub fn run_with_callback<F>(&mut self, mut callback: F)
@@ -167,10 +176,10 @@ impl Cpu {
             let mode = &opcodes::INSTRUCTION_MODES[opcode as usize];
             let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
 
+            self.exec(opcode, mnemonic, mode);
+
             // Execute the callback
             callback(self);
-
-            self.exec(opcode, mnemonic, mode);
         }
     }
 
@@ -178,7 +187,8 @@ impl Cpu {
         // Reset the registers
         self.regs.a = 0;
         self.regs.x = 0;
-        self.regs.set_flags(0);
+        self.regs.y = 0;
+        self.regs.set_flags(0b100100);
         self.sp = STACK_RESET;
 
         // Set the program counter to the start of the program as stored in 0xFFFC during load
@@ -193,7 +203,7 @@ impl Cpu {
         self.memory[addr as usize] = data;
     }
 
-    pub fn mem_read_u16(&mut self, addr: u16) -> u16 {
+    pub fn mem_read_u16(&self, addr: u16) -> u16 {
         u16::from_le_bytes([self.mem_read(addr), self.mem_read(addr + 1)])
     }
 
@@ -206,8 +216,7 @@ impl Cpu {
 
     /// Push a byte unto the stack
     fn push_u8(&mut self, value: u8) {
-        let address = STACK_OFFSET + self.sp as u16;
-        self.mem_write(address, value);
+        self.mem_write(STACK_OFFSET as u16 + self.sp as u16, value);
         self.sp = self.sp.wrapping_sub(1);
     }
 
@@ -220,7 +229,7 @@ impl Cpu {
     /// Pop a byte off the stack
     fn pop_u8(&mut self) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        self.mem_read(STACK_OFFSET + (self.sp as u16))
+        self.mem_read(STACK_OFFSET as u16 + self.sp as u16)
     }
 
     /// Pop two bytes off the stack
@@ -231,14 +240,14 @@ impl Cpu {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x8000 .. (0x8000 + program.len())].copy_from_slice(&program[..]);
+        self.memory[0x0600 .. (0x0600 + program.len())].copy_from_slice(&program[..]);
 
         // Store the reference to the start of the code in 0xFFFC
-        self.mem_write_u16(0xFFFC, 0x8000);
+        self.mem_write_u16(0xFFFC, 0x0600);
     }
 
     /// Get the address of the next operand based on the addressing mode
-    fn get_next_operand_address(&mut self, mode: &AddressingMode) -> u16 {
+    fn get_next_operand_address(&self, mode: &AddressingMode) -> u16 {
         // We need to look at the next byte after the current position of the program counter
         let pc_next = self.pc.wrapping_add(1);
 
@@ -281,14 +290,24 @@ impl Cpu {
                 deref
             },
             // Relative addressing
-            AddressingMode::REL => {
-                let offset = self.mem_read(pc_next) as u16;
-                if offset < 0x80 {
-                    pc_next.wrapping_add(1 + offset)
-                } else {
-                    pc_next.wrapping_add(1 + offset - 0x100)
-                }
-            }
+            AddressingMode::REL => pc_next,
+            // AddressingMode::REL => {
+                // let offset = self.mem_read(pc_next);
+                // let sign = operand >> 7;
+
+                // if sign == 0 {
+                //     pc_next.wrapping_add((operand & 0b0111111) as u16)
+                // } else {
+                //     let offset = 128 - (operand & 0b01111111);
+                //     pc_next.wrapping_sub(offset as u16)
+                // }
+
+                // if offset < 0x80 {
+                //     pc_next.wrapping_add(1 + offset)
+                // } else {
+                //     pc_next.wrapping_add(1 + offset.wrapping_sub(0x100))
+                // }
+            // }
             // Zero Page addressing
             AddressingMode::ZPG => self.mem_read(pc_next) as u16,
             // Indexed Zero Page X addressing
@@ -389,27 +408,29 @@ impl Cpu {
             _ => panic!("Unknown opcode encountered: {:#X?}", opcode),
         }
 
-        // Increase the program counter by the size of the instruction
-        self.pc = self.pc.wrapping_add(*size as u16);
+        match self.branched {
+            Some(addr) => self.pc = addr,
+            None => self.pc = self.pc.wrapping_add(*size as u16),
+        }
+
+        // Reset the branched status
+        self.branched = None;
     }
 
     /// Branch to the specified address if condition is true
-    fn branch(&mut self, condition: bool) {
-        if condition {
-            let jump: i8 = self.mem_read(self.pc) as i8;
-            let jump_addr = self
-                .pc
-                .wrapping_add(1)
-                .wrapping_add(jump as u16);
-
-            self.pc = jump_addr;
-        }
+    fn get_branch_addr(&self) -> u16 {
+        let jump: i8 = self.mem_read(self.pc + 1) as i8;
+        self
+            .pc
+            .wrapping_add(2)
+            .wrapping_add(jump as u16)
     }
 
     /// Compare values and set the zero and carry flags as appropriate
-    fn compare(&mut self, a: u8, b: u8) {
-        self.regs.set_zn(a - b);
-        if a >= b {
+    fn compare(&mut self, compare_with: u8, other: u8) {
+        self.regs.set_zn(compare_with.wrapping_sub(other));
+
+        if other <= compare_with {
             self.regs.c = 1;
         } else {
             self.regs.c = 0;
@@ -439,7 +460,7 @@ impl Cpu {
         }
 
         // Check if overflow flag must be set
-        if (operand ^ result) & (result ^ self.regs.a) & 0x80 != 0 {
+        if (a ^ operand) & 0x80 == 0 && (a ^ self.regs.a) & 0x80 != 0 {
             self.regs.v = 1;
         } else {
             self.regs.v = 0;
@@ -476,17 +497,29 @@ impl Cpu {
 
     /// Branch if carry clear
     fn bcc(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.c == 0);
+        if self.regs.c == 0 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Branch if carry set
     fn bcs(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.c == 1);
+        if self.regs.c == 1 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Branch if equal
     fn beq(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.z == 0);
+        if self.regs.z == 1 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Bit test
@@ -501,17 +534,29 @@ impl Cpu {
 
     /// Branch if minus
     fn bmi(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.n == 1)
+        if self.regs.n == 1 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Branch if not equal
     fn bne(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.z == 0)
+        if self.regs.z == 0 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Branch if positive
     fn bpl(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.n == 0)
+        if self.regs.n == 0 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Force interrupt
@@ -522,12 +567,20 @@ impl Cpu {
 
     /// Branch if overflow clear
     fn bvc(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.v == 0)
+        if self.regs.v == 0 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Branch if overflow set
     fn bvs(&mut self, mode: &AddressingMode) {
-        self.branch(self.regs.v == 1)
+        if self.regs.v == 1 {
+            self.branched = Some(self.get_branch_addr());
+        } else {
+            self.branched = None;
+        }
     }
 
     /// Clear Carry Flag
@@ -598,7 +651,7 @@ impl Cpu {
     /// Exclusive or
     fn eor(&mut self, mode: &AddressingMode) {
         let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address).wrapping_sub(1);
+        let operand = self.mem_read(address);
 
         self.regs.a = self.regs.a ^ operand;
         self.regs.set_zn(self.regs.a);
@@ -628,7 +681,8 @@ impl Cpu {
     /// Jump
     fn jmp(&mut self, mode: &AddressingMode) {
         if *mode == AddressingMode::ABS {
-            self.pc = self.mem_read_u16(self.pc);
+            let address = self.get_next_operand_address(mode);
+            self.branched = Some(address);
         } else if *mode == AddressingMode::IND {
             // An original 6502 has does not correctly fetch the target address if the indirect vector
             // falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF). In this case
@@ -642,14 +696,15 @@ impl Cpu {
                 self.mem_read_u16(address)
             };
 
-            self.pc = indirect_ref;
+            self.branched = Some(indirect_ref);
         }
     }
 
     /// Jump to subroutine
     fn jsr(&mut self, mode: &AddressingMode) {
-        self.push_u16(self.pc.wrapping_sub(1));
-        self.pc = self.get_next_operand_address(mode);
+        let address = self.get_next_operand_address(mode);
+        self.push_u16(self.pc + 3 - 1);
+        self.branched = Some(address);
     }
 
     /// Load accumulator
@@ -787,7 +842,7 @@ impl Cpu {
 
     /// Return from subroutine
     fn rts(&mut self) {
-        self.pc = self.pop_u16().wrapping_add(1);
+        self.pc = self.pop_u16();
     }
 
     /// Subtract with Carry
@@ -813,7 +868,7 @@ impl Cpu {
         }
 
         // Check if overflow flag must be set
-        if (data ^ result) & (result ^ self.regs.a) & 0x80 != 0 {
+        if (a ^ data) & 0x80 == 0 && (a ^ self.regs.a) & 0x80 != 0 {
             self.regs.v = 1;
         } else {
             self.regs.v = 0;
@@ -1057,5 +1112,87 @@ mod test {
         cpu.run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 
         assert_eq!(cpu.regs.x, 0xc1)
+    }
+
+    #[test]
+    fn verify_nestest() {
+        let mut cpu = Cpu::new();
+        let test_rom = include_bytes!("../../test-roms/nestest.nes").to_vec();
+        let test_results = include_str!("../../test-roms/nestest-results.txt").lines();
+
+        let rom_data = &test_rom[0x0010..0x4000];
+        let rom_len = rom_data.len();
+
+        cpu.memory[0x0800 .. (0x0800 + rom_data.len())].copy_from_slice(rom_data);
+        cpu.memory[0xC000 .. (0xC000 + rom_data.len())].copy_from_slice(rom_data);
+
+        cpu.regs.set_flags(0x24);
+        cpu.sp = 0xFD;
+        cpu.pc = 0xC000;
+
+        for result in test_results {
+            let actual = cpu.to_string();
+            assert_eq!(actual, result);
+            cpu.step();
+        }
+    }
+
+    impl fmt::Display for Cpu {
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            let opcode = self.mem_read(self.pc);
+            let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
+            let addressing = &opcodes::INSTRUCTION_MODES[opcode as usize];
+            let address = self.get_next_operand_address(addressing);
+            let operand = self.mem_read_u16(address);
+            let address_bytes = u16::to_le_bytes(address);
+            let operand_bytes = u16::to_le_bytes(operand);
+            let jump_addr = self.get_branch_addr();
+
+            let bytes_fmt = match addressing {
+                &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
+                &AddressingMode::ZPX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ZPY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
+                &AddressingMode::ABX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ABY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IND => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IMP => format!(""),
+                &AddressingMode::ACC => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
+                &AddressingMode::REL => format!("{:02X}", operand_bytes[0]),
+                &AddressingMode::IDX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IDY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::UNKNOWN => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
+            };
+
+            let mnemonic_fmt = match addressing {
+                &AddressingMode::ZPG => format!("{:?} ${:02X}", mnemonic, address_bytes[0]),
+                &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, operand_bytes[0]),
+                &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, operand_bytes[0]),
+                &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
+                &AddressingMode::ABX => format!("{:?} ${:02X},X", mnemonic, &operand),
+                &AddressingMode::ABY => format!("{:?} ${:02X},Y", mnemonic, &operand),
+                &AddressingMode::IND => format!("{:?} $({:02X})", mnemonic, &operand),
+                &AddressingMode::IMP => format!("{:?}", mnemonic),
+                &AddressingMode::ACC => format!("{:?} A", mnemonic),
+                &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
+                &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, jump_addr),
+                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, operand_bytes[0]),
+                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, operand_bytes[0]),
+                &AddressingMode::UNKNOWN => format!("")
+            };
+
+            write!(f, "{:X}  {:02X} {: <5}  {: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+                   self.pc,
+                   opcode,
+                   bytes_fmt,
+                   mnemonic_fmt,
+                   self.regs.a,
+                   self.regs.x,
+                   self.regs.y,
+                   self.regs.get_flags(),
+                   self.sp
+            )
+        }
     }
 }
