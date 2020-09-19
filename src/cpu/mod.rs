@@ -404,7 +404,7 @@ impl Cpu {
             Mnemonic::ISC => self.isc(),
             Mnemonic::KIL => self.kil(),
             Mnemonic::LAS => self.las(),
-            Mnemonic::LAX => self.lax(),
+            Mnemonic::LAX => self.lax(address),
             Mnemonic::RLA => self.rla(),
             Mnemonic::RRA => self.rra(),
             Mnemonic::SAX => self.sax(),
@@ -953,9 +953,12 @@ impl Cpu {
         panic!("Illegal opcode encountered: LAS");
     }
 
-    /// Illegal opcode: LAX
-    fn lax(&self) {
-        panic!("Illegal opcode encountered: LAX");
+    /// Loads a byte of memory into the accumulator and x
+    fn lax(&mut self, addr: u16) {
+        let value = self.mem_read(addr);
+        self.regs.x = value;
+        self.regs.a = value;
+        self.regs.set_zn(value);
     }
 
     /// Illegal opcode: RLA
@@ -1121,7 +1124,7 @@ mod test {
                 &AddressingMode::ZPX => format!("{:02X}", byte_one),
                 &AddressingMode::ZPY => format!("{:02X}", byte_one),
                 &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
-                &AddressingMode::ABX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ABX => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::ABY => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::IND => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::IMP => format!(""),
@@ -1138,7 +1141,7 @@ mod test {
                 &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, byte_one),
                 &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, byte_one),
                 &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
-                &AddressingMode::ABX => format!("{:?} ${:02X},X", mnemonic, &operand),
+                &AddressingMode::ABX => format!("{:?} ${:04X},X", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
                 &AddressingMode::ABY => format!("{:?} ${:04X},Y", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
                 &AddressingMode::IND => format!("{:?} (${:04X})", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
                 &AddressingMode::IMP => format!("{:?}", mnemonic),
@@ -1150,10 +1153,16 @@ mod test {
                 &AddressingMode::UNKNOWN => format!("")
             };
 
-            write!(f, "{:04X}  {:02X} {: <5}  {: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            let mnemonic_illegal = match &opcodes::INSTRUCTION_ILLEGAL.contains(&opcode) {
+                true => "*",
+                false => " ",
+            };
+
+            write!(f, "{:04X}  {:02X} {: <5} {}{: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
                    self.pc,
                    opcode,
                    bytes_fmt,
+                   mnemonic_illegal,
                    mnemonic_fmt,
                    self.regs.a,
                    self.regs.x,
