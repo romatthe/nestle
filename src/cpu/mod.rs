@@ -776,7 +776,7 @@ impl Cpu {
         let c = self.regs.c;
         self.regs.c = (operand >> 7) & 1;
         let operand = (operand << 1) | c;
-        self.mem_write(addr, (operand << 1) | c);
+        self.mem_write(addr, operand);
         self.regs.set_zn(operand);
     }
 
@@ -1137,7 +1137,7 @@ mod test {
                 &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
                 &AddressingMode::REL => format!("{:02X}", rel_offset),
                 &AddressingMode::IDX => format!("{:02X}", self.mem_read(self.pc + 1)),
-                &AddressingMode::IDY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IDY => format!("{:02X}", self.mem_read(self.pc + 1)),
                 &AddressingMode::UNKNOWN => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
             };
 
@@ -1154,7 +1154,7 @@ mod test {
                 &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
                 &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, address),
                 &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, self.mem_read(self.pc + 1)),
-                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, operand_bytes[0]),
+                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, self.mem_read(self.pc + 1)),
                 &AddressingMode::UNKNOWN => format!("")
             };
 
