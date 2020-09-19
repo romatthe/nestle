@@ -284,9 +284,11 @@ impl Cpu {
             },
             // Indirect addressing
             AddressingMode::IND => {
-                let base = self.mem_read_u16(pc_next);
+                let target = self.mem_read_u16(pc_next);
+                // Emulate a 6502 wraparound bug
+                let address_bugged = self.bug_mem_read_wraparound(target);
 
-                self.mem_read_u16(base)
+                address_bugged
             },
             // Indirect Indexed addressing
             AddressingMode::IDY => {
@@ -665,19 +667,7 @@ impl Cpu {
 
     /// Jump
     fn jmp(&mut self, addr: u16) {
-        // An original 6502 has does not correctly fetch the target address if the indirect vector
-        // falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF). In this case
-        // fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
-        let address = self.mem_read_u16(self.pc);
-        let indirect_ref = if address & 0x00FF == 0x00FF {
-            let lo = self.mem_read(address);
-            let hi = self.mem_read(address & 0xFF00);
-            (hi as u16) << 8 | (lo as u16)
-        } else {
-            self.mem_read_u16(address)
-        };
-
-        self.pc = indirect_ref;
+        self.pc = addr;
     }
 
     /// Jump with absolute addressing
@@ -1131,7 +1121,7 @@ mod test {
                 &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
                 &AddressingMode::ABX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::ABY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
-                &AddressingMode::IND => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::IND => format!("{:02X} {:02X}", self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)),
                 &AddressingMode::IMP => format!(""),
                 &AddressingMode::ACC => format!(""),
                 &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
@@ -1148,7 +1138,7 @@ mod test {
                 &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
                 &AddressingMode::ABX => format!("{:?} ${:02X},X", mnemonic, &operand),
                 &AddressingMode::ABY => format!("{:?} ${:02X},Y", mnemonic, &operand),
-                &AddressingMode::IND => format!("{:?} $({:02X})", mnemonic, &operand),
+                &AddressingMode::IND => format!("{:?} (${:04X})", mnemonic, u16::from_le_bytes([self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)])),
                 &AddressingMode::IMP => format!("{:?}", mnemonic),
                 &AddressingMode::ACC => format!("{:?} A", mnemonic),
                 &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
@@ -1158,7 +1148,7 @@ mod test {
                 &AddressingMode::UNKNOWN => format!("")
             };
 
-            write!(f, "{:X}  {:02X} {: <5}  {: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            write!(f, "{:04X}  {:02X} {: <5}  {: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
                    self.pc,
                    opcode,
                    bytes_fmt,
