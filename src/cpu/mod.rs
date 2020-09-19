@@ -775,6 +775,7 @@ impl Cpu {
         let operand = self.mem_read(addr);
         let c = self.regs.c;
         self.regs.c = (operand >> 7) & 1;
+        let operand = (operand << 1) | c;
         self.mem_write(addr, (operand << 1) | c);
         self.regs.set_zn(operand);
     }
@@ -793,7 +794,8 @@ impl Cpu {
         let mut operand = self.mem_read(addr);
 
         self.regs.c = operand & 1;
-        self.mem_write(addr, (operand >> 1) | (c << 7));
+        let operand = (operand >> 1) | (c << 7);
+        self.mem_write(addr, operand);
         self.regs.set_zn(operand);
     }
 
@@ -1105,6 +1107,7 @@ mod test {
 
         for result in test_results {
             let actual = cpu.to_string();
+            println!("{}", actual);
             assert_eq!(actual, result);
             cpu.step();
         }
