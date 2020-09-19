@@ -1106,6 +1106,8 @@ mod test {
     impl fmt::Display for Cpu {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             let opcode = self.mem_read(self.pc);
+            let byte_one = self.mem_read(self.pc + 1);
+            let byte_two = self.mem_read(self.pc + 2);
             let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
             let addressing = &opcodes::INSTRUCTION_MODES[opcode as usize];
             let address = self.get_next_operand_address(addressing);
@@ -1116,35 +1118,35 @@ mod test {
 
             let bytes_fmt = match addressing {
                 &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
-                &AddressingMode::ZPX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ZPX => format!("{:02X}", byte_one),
                 &AddressingMode::ZPY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
                 &AddressingMode::ABX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
-                &AddressingMode::ABY => format!("{:02X} {:02X}", self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)),
-                &AddressingMode::IND => format!("{:02X} {:02X}", self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)),
+                &AddressingMode::ABY => format!("{:02X} {:02X}", byte_one, byte_two),
+                &AddressingMode::IND => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::IMP => format!(""),
                 &AddressingMode::ACC => format!(""),
                 &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
                 &AddressingMode::REL => format!("{:02X}", rel_offset),
-                &AddressingMode::IDX => format!("{:02X}", self.mem_read(self.pc + 1)),
-                &AddressingMode::IDY => format!("{:02X}", self.mem_read(self.pc + 1)),
+                &AddressingMode::IDX => format!("{:02X}", byte_one),
+                &AddressingMode::IDY => format!("{:02X}", byte_one),
                 &AddressingMode::UNKNOWN => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
             };
 
             let mnemonic_fmt = match addressing {
                 &AddressingMode::ZPG => format!("{:?} ${:02X}", mnemonic, address_bytes[0]),
-                &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, operand_bytes[0]),
+                &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, byte_one),
                 &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, operand_bytes[0]),
                 &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
                 &AddressingMode::ABX => format!("{:?} ${:02X},X", mnemonic, &operand),
-                &AddressingMode::ABY => format!("{:?} ${:04X},Y", mnemonic, u16::from_le_bytes([self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)])),
-                &AddressingMode::IND => format!("{:?} (${:04X})", mnemonic, u16::from_le_bytes([self.mem_read(self.pc + 1), self.mem_read(self.pc + 2)])),
+                &AddressingMode::ABY => format!("{:?} ${:04X},Y", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
+                &AddressingMode::IND => format!("{:?} (${:04X})", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
                 &AddressingMode::IMP => format!("{:?}", mnemonic),
                 &AddressingMode::ACC => format!("{:?} A", mnemonic),
                 &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
                 &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, address),
-                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, self.mem_read(self.pc + 1)),
-                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, self.mem_read(self.pc + 1)),
+                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, byte_one),
+                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, byte_one),
                 &AddressingMode::UNKNOWN => format!("")
             };
 
