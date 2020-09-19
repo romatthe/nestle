@@ -275,7 +275,6 @@ impl Cpu {
             AddressingMode::IMP => 0,
             // Indexed Indirect addressing
             AddressingMode::IDX => {
-                // TODO: Does this contain a 6502 bug?
                 let target = self.mem_read(pc_next).wrapping_add(self.regs.x) as u16;
                 // Emulate a 6502 wraparound bug
                 let address_bugged = self.bug_mem_read_wraparound(target);
@@ -416,26 +415,8 @@ impl Cpu {
             Mnemonic::XAA => self.xaa(),
 
             // Unknown
-            Mnemonic::UNKNOWN => panic!("Unknown opcode encountered: {:#X?}", opcode),
             _ => panic!("Unknown opcode encountered: {:#X?}", opcode),
         }
-
-        // match self.branched {
-        //     Some(addr) => self.pc = addr,
-        //     None => self.pc = self.pc.wrapping_add(*size as u16),
-        // }
-
-        // Reset the branched status
-        // self.branched = None;
-    }
-
-    /// Branch to the specified address if condition is true
-    fn get_branch_addr(&self) -> u16 {
-        let jump: i8 = self.mem_read(self.pc + 1) as i8;
-        self
-            .pc
-            .wrapping_add(2)
-            .wrapping_add(jump as u16)
     }
 
     /// Compare values and set the zero and carry flags as appropriate
@@ -559,7 +540,6 @@ impl Cpu {
     /// Force interrupt
     fn brk(&mut self) {
         // TODO: Figure out the correct way to handle interrupts
-        // self.running = false;
     }
 
     /// Branch if overflow clear
@@ -721,7 +701,7 @@ impl Cpu {
         self.regs.set_zn(self.regs.a);
     }
 
-        /// No operation
+    /// No operation
     fn nop(&self) {
 
     }
@@ -1012,77 +992,6 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_inx() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xe8, 0x00]);
-
-        assert_eq!(cpu.regs.x, 1)
-    }
-
-    #[test]
-    fn test_inx_overflow() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xa9, 0xff, 0xaa, 0xe8, 0xe8, 0x00]);
-
-        assert_eq!(cpu.regs.x, 1)
-    }
-
-    #[test]
-    fn test_lda_immediate() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xa9, 0x05, 0x00]);
-        assert_eq!(cpu.regs.a, 5);
-        assert_eq!(cpu.regs.c, 0);
-        assert_eq!(cpu.regs.n, 0);
-    }
-
-    #[test]
-    fn test_lda_from_memory() {
-        let mut cpu = Cpu::new();
-        cpu.mem_write(0x10, 0x55);
-
-        cpu.run(vec![0xa5, 0x10, 0x00]);
-
-        assert_eq!(cpu.regs.a, 0x55);
-    }
-
-    #[test]
-    fn test_lda_zero_flag() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xa9, 0x00, 0x00]);
-        assert_eq!(cpu.regs.z, 1);
-    }
-
-    #[test]
-    fn test_sta_absolute() {
-        let mut cpu = Cpu::new();
-
-        // Write 0x55 to location 0x10
-        cpu.mem_write(0x10, 0x55);
-
-        // Load a from location 0x10 the store a in location 0x20
-        cpu.run(vec![0xa5, 0x10, 0x8d, 0x20, 0x00, 0x00]);
-
-        assert_eq!(cpu.mem_read(0x20), 0x55)
-    }
-
-    #[test]
-    fn test_tax() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xa9, 0x0A,0xaa, 0x00]);
-
-        assert_eq!(cpu.regs.x, 10)
-    }
-
-    #[test]
-    fn test_5_ops_working_together() {
-        let mut cpu = Cpu::new();
-        cpu.run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
-
-        assert_eq!(cpu.regs.x, 0xc1)
-    }
-
-    #[test]
     fn verify_nestest() {
         let mut cpu = Cpu::new();
         let test_rom = include_bytes!("../../test-roms/nestest.nes").to_vec();
@@ -1100,7 +1009,6 @@ mod test {
 
         for result in test_results {
             let actual = cpu.to_string();
-            println!("{}", actual);
             assert_eq!(actual, result);
             cpu.step();
         }
