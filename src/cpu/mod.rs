@@ -1119,7 +1119,7 @@ mod test {
             let bytes_fmt = match addressing {
                 &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
                 &AddressingMode::ZPX => format!("{:02X}", byte_one),
-                &AddressingMode::ZPY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ZPY => format!("{:02X}", byte_one),
                 &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
                 &AddressingMode::ABX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::ABY => format!("{:02X} {:02X}", byte_one, byte_two),
@@ -1136,7 +1136,7 @@ mod test {
             let mnemonic_fmt = match addressing {
                 &AddressingMode::ZPG => format!("{:?} ${:02X}", mnemonic, address_bytes[0]),
                 &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, byte_one),
-                &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, operand_bytes[0]),
+                &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, byte_one),
                 &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
                 &AddressingMode::ABX => format!("{:?} ${:02X},X", mnemonic, &operand),
                 &AddressingMode::ABY => format!("{:?} ${:04X},Y", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
