@@ -134,8 +134,8 @@ pub struct Cpu {
     memory: [u8; 0xFFFF],
     /// CPU should exit when set to `false`
     running: bool,
-    /// Mark if branched, and if so, which address is being branched to
-    branched: Option<u16>,
+    // Mark if branched, and if so, which address is being branched to
+    // branched: Option<u16>,
 }
 
 impl Cpu {
@@ -146,7 +146,6 @@ impl Cpu {
             regs: Registers::new(),
             memory: [0x0; 0xFFFF],
             running: true,
-            branched: None,
         }
     }
 
@@ -246,6 +245,16 @@ impl Cpu {
         self.mem_write_u16(0xFFFC, 0x0600);
     }
 
+    /// Emulates a 6502 bug that caused the low byte to wrap without incrementing the high byte
+    fn bug_mem_read_wraparound(&self, address: u16) -> u16 {
+        let a = address;
+        let b = (a & 0xFF00) | ((a as u8).wrapping_add(1) as u16);
+        let lo= self.mem_read(a);
+        let hi= self.mem_read(b);
+
+        (hi as u16) << 8 | (lo as u16)
+    }
+
     /// Get the address of the next operand based on the addressing mode
     fn get_next_operand_address(&self, mode: &AddressingMode) -> u16 {
         // We need to look at the next byte after the current position of the program counter
@@ -266,11 +275,12 @@ impl Cpu {
             AddressingMode::IMP => 0,
             // Indexed Indirect addressing
             AddressingMode::IDX => {
-                let base = self.mem_read(pc_next).wrapping_add(self.regs.x);
-                let lo = self.mem_read(base as u16);
-                let hi = self.mem_read(base.wrapping_add(1) as u16);
+                // TODO: Does this contain a 6502 bug?
+                let target = self.mem_read(pc_next).wrapping_add(self.regs.x) as u16;
+                // Emulate a 6502 wraparound bug
+                let address_bugged = self.bug_mem_read_wraparound(target);
 
-                u16::from_le_bytes([lo, hi])
+                address_bugged
             },
             // Indirect addressing
             AddressingMode::IND => {
@@ -290,24 +300,14 @@ impl Cpu {
                 deref
             },
             // Relative addressing
-            AddressingMode::REL => pc_next,
-            // AddressingMode::REL => {
-                // let offset = self.mem_read(pc_next);
-                // let sign = operand >> 7;
-
-                // if sign == 0 {
-                //     pc_next.wrapping_add((operand & 0b0111111) as u16)
-                // } else {
-                //     let offset = 128 - (operand & 0b01111111);
-                //     pc_next.wrapping_sub(offset as u16)
-                // }
-
-                // if offset < 0x80 {
-                //     pc_next.wrapping_add(1 + offset)
-                // } else {
-                //     pc_next.wrapping_add(1 + offset.wrapping_sub(0x100))
-                // }
-            // }
+            AddressingMode::REL => {
+                let offset = self.mem_read(pc_next) as u16;
+                if offset < 0x80 {
+                    pc_next + 1 + offset
+                } else {
+                    pc_next + 1 + offset - 0x100
+                }
+            },
             // Zero Page addressing
             AddressingMode::ZPG => self.mem_read(pc_next) as u16,
             // Indexed Zero Page X addressing
@@ -321,60 +321,70 @@ impl Cpu {
 
     /// Execute an instruction in the current CPU state
     fn exec(&mut self, opcode: u8, mnemonic: &Mnemonic, mode: &AddressingMode) {
-        let operand = self.get_next_operand_address(mode);
+        let address = self.get_next_operand_address(mode);
         let size = &opcodes::INSTRUCTION_SIZES[opcode as usize];
 
+        self.pc += *size as u16;
+
         match mnemonic {
-            Mnemonic::ADC => self.adc(mode),
-            Mnemonic::AND => self.and(mode),
-            Mnemonic::ASL => self.asl(mode),
-            Mnemonic::BCC => self.bcc(mode),
-            Mnemonic::BCS => self.bcs(mode),
-            Mnemonic::BEQ => self.beq(mode),
-            Mnemonic::BIT => self.bit(mode),
-            Mnemonic::BMI => self.bmi(mode),
-            Mnemonic::BNE => self.bne(mode),
-            Mnemonic::BPL => self.bpl(mode),
+            // Variants
+            Mnemonic::ASL if opcode != 0x0A => self.asl(address),
+            Mnemonic::ASL if opcode == 0x0A => self.asl_acc(),
+            Mnemonic::JMP if opcode != 0x4C => self.jmp(address),
+            Mnemonic::JMP if opcode == 0x4C => self.jmp_abs(address),
+            Mnemonic::LSR if opcode != 0x4A => self.lsr(address),
+            Mnemonic::LSR if opcode == 0x4A => self.lsr_acc(),
+            Mnemonic::ROL if opcode != 0x2A => self.rol(address),
+            Mnemonic::ROL if opcode == 0x2A => self.rol_acc(),
+            Mnemonic::ROR if opcode != 0x6A => self.ror(address),
+            Mnemonic::ROR if opcode == 0x6A => self.ror_acc(),
+
+            // Regular
+            Mnemonic::ADC => self.adc(address),
+            Mnemonic::AND => self.and(address),
+            Mnemonic::BCC => self.bcc(address),
+            Mnemonic::BCS => self.bcs(address),
+            Mnemonic::BEQ => self.beq(address),
+            Mnemonic::BIT => self.bit(address),
+            Mnemonic::BMI => self.bmi(address),
+            Mnemonic::BNE => self.bne(address),
+            Mnemonic::BPL => self.bpl(address),
             Mnemonic::BRK => self.brk(),
-            Mnemonic::BVC => self.bvc(mode),
-            Mnemonic::BVS => self.bvs(mode),
+            Mnemonic::BVC => self.bvc(address),
+            Mnemonic::BVS => self.bvs(address),
             Mnemonic::CLC => self.clc(),
             Mnemonic::CLD => self.cld(),
             Mnemonic::CLI => self.cli(),
             Mnemonic::CLV => self.clv(),
-            Mnemonic::CMP => self.cmp(mode),
-            Mnemonic::CPX => self.cpx(mode),
-            Mnemonic::CPY => self.cpy(mode),
-            Mnemonic::DEC => self.dec(mode),
+            Mnemonic::CMP => self.cmp(address),
+            Mnemonic::CPX => self.cpx(address),
+            Mnemonic::CPY => self.cpy(address),
+            Mnemonic::DEC => self.dec(address),
             Mnemonic::DEX => self.dex(),
             Mnemonic::DEY => self.dey(),
-            Mnemonic::EOR => self.eor(mode),
-            Mnemonic::INC => self.inc(mode),
+            Mnemonic::EOR => self.eor(address),
+            Mnemonic::INC => self.inc(address),
             Mnemonic::INX => self.inx(),
             Mnemonic::INY => self.iny(),
-            Mnemonic::JMP => self.jmp(mode),
-            Mnemonic::JSR => self.jsr(mode),
-            Mnemonic::LDA => self.lda(mode),
-            Mnemonic::LDX => self.ldx(mode),
-            Mnemonic::LDY => self.ldy(mode),
-            Mnemonic::LSR => self.lsr(mode),
+            Mnemonic::JSR => self.jsr(address),
+            Mnemonic::LDA => self.lda(address),
+            Mnemonic::LDX => self.ldx(address),
+            Mnemonic::LDY => self.ldy(address),
             Mnemonic::NOP => self.nop(),
-            Mnemonic::ORA => self.ora(mode),
+            Mnemonic::ORA => self.ora(address),
             Mnemonic::PHA => self.pha(),
             Mnemonic::PHP => self.php(),
             Mnemonic::PLA => self.pla(),
             Mnemonic::PLP => self.plp(),
-            Mnemonic::ROL => self.rol(mode),
-            Mnemonic::ROR => self.ror(mode),
             Mnemonic::RTI => self.rti(),
             Mnemonic::RTS => self.rts(),
-            Mnemonic::SBC => self.sbc(mode),
+            Mnemonic::SBC => self.sbc(address),
             Mnemonic::SEC => self.sec(),
             Mnemonic::SED => self.sed(),
-            Mnemonic::SEI => self.sei(mode),
-            Mnemonic::STA => self.sta(mode),
-            Mnemonic::STX => self.stx(mode),
-            Mnemonic::STY => self.sty(mode),
+            Mnemonic::SEI => self.sei(),
+            Mnemonic::STA => self.sta(address),
+            Mnemonic::STX => self.stx(address),
+            Mnemonic::STY => self.sty(address),
             Mnemonic::TAX => self.tax(),
             Mnemonic::TAY => self.tay(),
             Mnemonic::TSX => self.tsx(),
@@ -382,7 +392,7 @@ impl Cpu {
             Mnemonic::TXS => self.txs(),
             Mnemonic::TYA => self.tya(),
 
-            // Illegal opcodes
+            // Illegal
             Mnemonic::AHX => self.ahx(),
             Mnemonic::ALR => self.alr(),
             Mnemonic::ANC => self.anc(),
@@ -408,13 +418,13 @@ impl Cpu {
             _ => panic!("Unknown opcode encountered: {:#X?}", opcode),
         }
 
-        match self.branched {
-            Some(addr) => self.pc = addr,
-            None => self.pc = self.pc.wrapping_add(*size as u16),
-        }
+        // match self.branched {
+        //     Some(addr) => self.pc = addr,
+        //     None => self.pc = self.pc.wrapping_add(*size as u16),
+        // }
 
         // Reset the branched status
-        self.branched = None;
+        // self.branched = None;
     }
 
     /// Branch to the specified address if condition is true
@@ -438,9 +448,8 @@ impl Cpu {
     }
 
     /// Add with carry
-    fn adc(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn adc(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         // Store initial values for later reference
         let a = self.regs.a;
@@ -468,64 +477,56 @@ impl Cpu {
     }
 
     /// Logical AND
-    fn and(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn and(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.regs.a = self.regs.a & operand;
         self.regs.set_zn(self.regs.a);
     }
 
     /// Arithmetic Shift Left
-    fn asl(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::ACC {
-            // Set the carry flag accordingly
-            self.regs.c = (self.regs.a >> 7) & 1;
+    fn asl(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
+        let value = operand << 1;
 
-            self.regs.a <<= 1;
-            self.regs.set_zn(self.regs.a);
-        } else {
-            let address = self.get_next_operand_address(mode);
-            let operand = self.mem_read(address);
-            let value = operand << 1;
+        self.regs.c = (operand >> 7) & 1;
+        self.mem_write(addr, value);
+        self.regs.set_zn(value);
+    }
 
-            self.regs.c = (operand >> 7) & 1;
-            self.mem_write(address, value);
-            self.regs.set_zn(value);
-        }
+    /// Arithmetic Shift Left with accumulator addressing mode
+    fn asl_acc(&mut self) {
+        // Set the carry flag accordingly
+        self.regs.c = (self.regs.a >> 7) & 1;
+
+        self.regs.a <<= 1;
+        self.regs.set_zn(self.regs.a);
     }
 
     /// Branch if carry clear
-    fn bcc(&mut self, mode: &AddressingMode) {
+    fn bcc(&mut self, addr: u16) {
         if self.regs.c == 0 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Branch if carry set
-    fn bcs(&mut self, mode: &AddressingMode) {
+    fn bcs(&mut self, addr: u16) {
         if self.regs.c == 1 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Branch if equal
-    fn beq(&mut self, mode: &AddressingMode) {
+    fn beq(&mut self, addr: u16) {
         if self.regs.z == 1 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Bit test
-    fn bit(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn bit(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.regs.v = (operand >> 6) & 1;
         self.regs.set_z(operand & self.regs.a);
@@ -533,29 +534,23 @@ impl Cpu {
     }
 
     /// Branch if minus
-    fn bmi(&mut self, mode: &AddressingMode) {
+    fn bmi(&mut self, addr: u16) {
         if self.regs.n == 1 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Branch if not equal
-    fn bne(&mut self, mode: &AddressingMode) {
+    fn bne(&mut self, addr: u16) {
         if self.regs.z == 0 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Branch if positive
-    fn bpl(&mut self, mode: &AddressingMode) {
+    fn bpl(&mut self, addr: u16) {
         if self.regs.n == 0 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
@@ -566,20 +561,16 @@ impl Cpu {
     }
 
     /// Branch if overflow clear
-    fn bvc(&mut self, mode: &AddressingMode) {
+    fn bvc(&mut self, addr: u16) {
         if self.regs.v == 0 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
     /// Branch if overflow set
-    fn bvs(&mut self, mode: &AddressingMode) {
+    fn bvs(&mut self, addr: u16) {
         if self.regs.v == 1 {
-            self.branched = Some(self.get_branch_addr());
-        } else {
-            self.branched = None;
+            self.pc = addr;
         }
     }
 
@@ -604,35 +595,31 @@ impl Cpu {
     }
 
     /// Compare
-    fn cmp(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn cmp(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.compare(self.regs.a, operand);
     }
 
     /// Compare X Register
-    fn cpx(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn cpx(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.compare(self.regs.x, operand);
     }
 
     /// Compare X Register
-    fn cpy(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn cpy(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.compare(self.regs.y, operand);
     }
 
     /// Decrement memory
-    fn dec(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address).wrapping_sub(1);
+    fn dec(&mut self, addr: u16) {
+        let operand = self.mem_read(addr).wrapping_sub(1);
 
-        self.mem_write(address, operand);
+        self.mem_write(addr, operand);
         self.regs.set_zn(operand);
     }
 
@@ -649,20 +636,18 @@ impl Cpu {
     }
 
     /// Exclusive or
-    fn eor(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn eor(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.regs.a = self.regs.a ^ operand;
         self.regs.set_zn(self.regs.a);
     }
 
     /// Increment memory
-    fn inc(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address).wrapping_add(1);
+    fn inc(&mut self, addr: u16) {
+        let operand = self.mem_read(addr).wrapping_add(1);
 
-        self.mem_write(address, operand);
+        self.mem_write(addr, operand);
         self.regs.set_zn(operand);
     }
 
@@ -679,55 +664,49 @@ impl Cpu {
     }
 
     /// Jump
-    fn jmp(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::ABS {
-            let address = self.get_next_operand_address(mode);
-            self.branched = Some(address);
-        } else if *mode == AddressingMode::IND {
-            // An original 6502 has does not correctly fetch the target address if the indirect vector
-            // falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF). In this case
-            // fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
-            let address = self.mem_read_u16(self.pc);
-            let indirect_ref = if address & 0x00FF == 0x00FF {
-                let lo = self.mem_read(address);
-                let hi = self.mem_read(address & 0xFF00);
-                (hi as u16) << 8 | (lo as u16)
-            } else {
-                self.mem_read_u16(address)
-            };
+    fn jmp(&mut self, addr: u16) {
+        // An original 6502 has does not correctly fetch the target address if the indirect vector
+        // falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF). In this case
+        // fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
+        let address = self.mem_read_u16(self.pc);
+        let indirect_ref = if address & 0x00FF == 0x00FF {
+            let lo = self.mem_read(address);
+            let hi = self.mem_read(address & 0xFF00);
+            (hi as u16) << 8 | (lo as u16)
+        } else {
+            self.mem_read_u16(address)
+        };
 
-            self.branched = Some(indirect_ref);
-        }
+        self.pc = indirect_ref;
+    }
+
+    /// Jump with absolute addressing
+    fn jmp_abs(&mut self, addr: u16) {
+        self.pc = addr;
     }
 
     /// Jump to subroutine
-    fn jsr(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        self.push_u16(self.pc + 3 - 1);
-        self.branched = Some(address);
+    fn jsr(&mut self, addr: u16) {
+        self.push_u16(self.pc - 1);
+        self.pc = addr;
     }
 
     /// Load accumulator
-    fn lda(&mut self, mode: &AddressingMode) {
-        let addr = self.get_next_operand_address(&mode);
+    fn lda(&mut self, addr: u16) {
         let operand = self.mem_read(addr);
-
         self.regs.a = operand;
         self.regs.set_zn(self.regs.a);
     }
 
     /// Load x register
-    fn ldx(&mut self, mode: &AddressingMode) {
-        let addr = self.get_next_operand_address(&mode);
+    fn ldx(&mut self, addr: u16) {
         let operand = self.mem_read(addr);
-
         self.regs.x = operand;
         self.regs.set_zn(self.regs.x);
     }
 
     /// Load y register
-    fn ldy(&mut self, mode: &AddressingMode) {
-        let addr = self.get_next_operand_address(&mode);
+    fn ldy(&mut self, addr: u16) {
         let operand = self.mem_read(addr);
 
         self.regs.y = operand;
@@ -735,32 +714,31 @@ impl Cpu {
     }
 
     /// Logical shift right
-    fn lsr(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::ACC {
-            self.regs.c = self.regs.a & 1;
-            self.regs.a >>= 1;
-            self.regs.set_zn(self.regs.a);
-        } else {
-            let address = self.get_next_operand_address(mode);
-            let mut operand = self.mem_read(address);
+    fn lsr(&mut self, addr: u16) {
+        let mut operand = self.mem_read(addr);
 
-            self.regs.c = operand & 1;
-            operand >>= 1;
+        self.regs.c = operand & 1;
+        operand >>= 1;
 
-            self.mem_write(address, operand);
-            self.regs.set_zn(operand);
-        }
+        self.mem_write(addr, operand);
+        self.regs.set_zn(operand);
     }
 
-    /// No operation
+    /// Logical shift right with accumulator addressing mode
+    fn lsr_acc(&mut self) {
+        self.regs.c = self.regs.a & 1;
+        self.regs.a >>= 1;
+        self.regs.set_zn(self.regs.a);
+    }
+
+        /// No operation
     fn nop(&self) {
 
     }
 
     /// Logical inclusive or
-    fn ora(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn ora(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
 
         self.regs.a = self.regs.a | operand;
         self.regs.set_zn(self.regs.a);
@@ -793,39 +771,38 @@ impl Cpu {
     }
 
     /// Rotate left
-    fn rol(&mut self, mode: &AddressingMode) {
+    fn rol(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
         let c = self.regs.c;
+        self.regs.c = (operand >> 7) & 1;
+        self.mem_write(addr, (operand << 1) | c);
+        self.regs.set_zn(operand);
+    }
 
-        if *mode == AddressingMode::ACC {
-            self.regs.c = (self.regs.a >> 7) & 1;
-            self.regs.a = (self.regs.a << 1) | c;
-            self.regs.set_zn(self.regs.a);
-        } else {
-            let address = self.get_next_operand_address(mode);
-            let mut operand = self.mem_read(address);
-
-            self.regs.c = (operand >> 7) & 1;
-            self.mem_write(address, (operand << 1) | c);
-            self.regs.set_zn(operand);
-        }
+    /// Rotate left with accumulator addressing
+    fn rol_acc(&mut self) {
+        let c = self.regs.c;
+        self.regs.c = (self.regs.a >> 7) & 1;
+        self.regs.a = (self.regs.a << 1) | c;
+        self.regs.set_zn(self.regs.a);
     }
 
     /// Rotate right
-    fn ror(&mut self, mode: &AddressingMode) {
+    fn ror(&mut self, addr: u16) {
         let c = self.regs.c;
+        let mut operand = self.mem_read(addr);
 
-        if *mode == AddressingMode::ACC {
-            self.regs.c = self.regs.a & 1;
-            self.regs.a = (self.regs.a >> 1) | (c << 7);
-            self.regs.set_zn(self.regs.a);
-        } else {
-            let address = self.get_next_operand_address(mode);
-            let mut operand = self.mem_read(address);
+        self.regs.c = operand & 1;
+        self.mem_write(addr, (operand >> 1) | (c << 7));
+        self.regs.set_zn(operand);
+    }
 
-            self.regs.c = operand & 1;
-            self.mem_write(address, (operand >> 1) | (c << 7));
-            self.regs.set_zn(operand);
-        }
+    /// Rotate right with accumulator addressing
+    fn ror_acc(&mut self) {
+        let c = self.regs.c;
+        self.regs.c = self.regs.a & 1;
+        self.regs.a = (self.regs.a >> 1) | (c << 7);
+        self.regs.set_zn(self.regs.a);
     }
 
     /// Return from interrupt
@@ -842,13 +819,12 @@ impl Cpu {
 
     /// Return from subroutine
     fn rts(&mut self) {
-        self.pc = self.pop_u16();
+        self.pc = self.pop_u16() + 1;
     }
 
     /// Subtract with Carry
-    fn sbc(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        let operand = self.mem_read(address);
+    fn sbc(&mut self, addr: u16) {
+        let operand = self.mem_read(addr);
         let data = (operand as i8).wrapping_neg().wrapping_sub(1) as u8;
 
         let a = self.regs.a;
@@ -886,26 +862,23 @@ impl Cpu {
     }
 
     /// Set interrupt disable
-    fn sei(&mut self, mode: &AddressingMode) {
+    fn sei(&mut self) {
         self.regs.i = 1;
     }
 
     /// Store accumulator
-    fn sta(&mut self, mode: &AddressingMode) {
-        let addr = self.get_next_operand_address(mode);
+    fn sta(&mut self, addr: u16) {
         self.mem_write(addr, self.regs.a);
     }
 
     /// Store the x register
-    fn stx(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        self.mem_write(address, self.regs.x);
+    fn stx(&mut self, addr: u16) {
+        self.mem_write(addr, self.regs.x);
     }
 
     /// Store the y register
-    fn sty(&mut self, mode: &AddressingMode) {
-        let address = self.get_next_operand_address(mode);
-        self.mem_write(address, self.regs.y);
+    fn sty(&mut self, addr: u16) {
+        self.mem_write(addr, self.regs.y);
     }
 
     /// Transfer accumulator to x
@@ -1146,7 +1119,7 @@ mod test {
             let operand = self.mem_read_u16(address);
             let address_bytes = u16::to_le_bytes(address);
             let operand_bytes = u16::to_le_bytes(operand);
-            let jump_addr = self.get_branch_addr();
+            let rel_offset = self.mem_read(self.pc + 1);
 
             let bytes_fmt = match addressing {
                 &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
@@ -1157,10 +1130,10 @@ mod test {
                 &AddressingMode::ABY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::IND => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::IMP => format!(""),
-                &AddressingMode::ACC => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::ACC => format!(""),
                 &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
-                &AddressingMode::REL => format!("{:02X}", operand_bytes[0]),
-                &AddressingMode::IDX => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
+                &AddressingMode::REL => format!("{:02X}", rel_offset),
+                &AddressingMode::IDX => format!("{:02X}", self.mem_read(self.pc + 1)),
                 &AddressingMode::IDY => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1]),
                 &AddressingMode::UNKNOWN => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
             };
@@ -1176,8 +1149,8 @@ mod test {
                 &AddressingMode::IMP => format!("{:?}", mnemonic),
                 &AddressingMode::ACC => format!("{:?} A", mnemonic),
                 &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
-                &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, jump_addr),
-                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, operand_bytes[0]),
+                &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, address),
+                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, self.mem_read(self.pc + 1)),
                 &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, operand_bytes[0]),
                 &AddressingMode::UNKNOWN => format!("")
             };
