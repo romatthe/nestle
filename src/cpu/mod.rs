@@ -399,7 +399,7 @@ impl Cpu {
             Mnemonic::ANC => self.anc(),
             Mnemonic::ARR => self.arr(),
             Mnemonic::AXS => self.axs(),
-            Mnemonic::DCP => self.dcp(),
+            Mnemonic::DCP => self.dcp(address),
             Mnemonic::ISC => self.isc(),
             Mnemonic::KIL => self.kil(),
             Mnemonic::LAS => self.las(),
@@ -913,9 +913,10 @@ impl Cpu {
         panic!("Illegal opcode encountered: AXS");
     }
 
-    /// Illegal opcode: DCP
-    fn dcp(&self) {
-        panic!("Illegal opcode encountered: DCP");
+    /// DECs the contents of a memory location and then CMPs the result with the A register
+    fn dcp(&mut self, addr: u16) {
+        self.dec(addr);
+        self.cmp(addr);
     }
 
     /// Illegal opcode: ISC
