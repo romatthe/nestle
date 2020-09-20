@@ -421,7 +421,7 @@ impl Cpu {
             Mnemonic::SAX => self.sax(address),
             Mnemonic::SHX => self.shx(),
             Mnemonic::SHY => self.shy(),
-            Mnemonic::SLO => self.slo(),
+            Mnemonic::SLO => self.slo(address),
             Mnemonic::SRE => self.sre(),
             Mnemonic::TAS => self.tas(),
             Mnemonic::XAA => self.xaa(),
@@ -873,6 +873,12 @@ impl Cpu {
         self.regs.i = 1;
     }
 
+    /// ASLs the contents of a memory location and then ORs the result with the accumulator
+    fn slo(&mut self, addr: u16) {
+        self.asl(addr);
+        self.ora(addr);
+    }
+
     /// Store accumulator
     fn sta(&mut self, addr: u16) {
         self.mem_write(addr, self.regs.a);
@@ -976,11 +982,6 @@ impl Cpu {
     /// Illegal opcode: SHY
     fn shy(&self) {
         panic!("Illegal opcode encountered: SHY");
-    }
-
-    /// Illegal opcode: SLO
-    fn slo(&self) {
-        panic!("Illegal opcode encountered: SLO");
     }
 
     /// Illegal opcode: SRE
