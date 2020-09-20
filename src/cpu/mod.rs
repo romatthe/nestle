@@ -406,7 +406,7 @@ impl Cpu {
             Mnemonic::LAX => self.lax(address),
             Mnemonic::RLA => self.rla(),
             Mnemonic::RRA => self.rra(),
-            Mnemonic::SAX => self.sax(),
+            Mnemonic::SAX => self.sax(address),
             Mnemonic::SHX => self.shx(),
             Mnemonic::SHY => self.shy(),
             Mnemonic::SLO => self.slo(),
@@ -952,8 +952,8 @@ impl Cpu {
     }
 
     /// Illegal opcode: SAX
-    fn sax(&self) {
-        panic!("Illegal opcode encountered: SAX");
+    fn sax(&mut self, addr: u16) {
+        self.mem_write(addr, self.regs.a & self.regs.x);
     }
 
     /// Illegal opcode: SHX
@@ -1009,6 +1009,7 @@ mod test {
 
         for result in test_results {
             let actual = cpu.to_string();
+            println!("{}", actual);
             assert_eq!(actual, result);
             cpu.step();
         }
