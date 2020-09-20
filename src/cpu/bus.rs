@@ -4,9 +4,7 @@ pub struct Bus {
 
 impl Bus {
     pub fn new() -> Self {
-        Bus {
-            ram: [0; 2048],
-        }
+        Bus { ram: [0; 2048] }
     }
 
     pub fn read_u8(&self, addr: u16) -> u8 {

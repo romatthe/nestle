@@ -1,9 +1,9 @@
-use crate::cpu::opcodes::{Mnemonic, AddressingMode, INSTRUCTION_SIZES};
 use crate::cpu::bus::Bus;
+use crate::cpu::opcodes::{AddressingMode, Mnemonic, INSTRUCTION_SIZES};
+use bitflags::_core::fmt::Formatter;
 use log::warn;
 use std::collections::HashMap;
 use std::fmt;
-use bitflags::_core::fmt::Formatter;
 
 pub mod bus;
 pub mod opcodes;
@@ -66,7 +66,19 @@ pub struct Registers {
 
 impl Registers {
     fn new() -> Self {
-        let mut regs = Registers { a: 0, x: 0, y: 0, c: 0, z: 0, i: 0, d: 0, b: 0, u: 0, v: 0, n: 0 };
+        let mut regs = Registers {
+            a: 0,
+            x: 0,
+            y: 0,
+            c: 0,
+            z: 0,
+            i: 0,
+            d: 0,
+            b: 0,
+            u: 0,
+            v: 0,
+            n: 0,
+        };
         regs.set_flags(0x24);
 
         regs
@@ -239,7 +251,7 @@ impl Cpu {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x0600 .. (0x0600 + program.len())].copy_from_slice(&program[..]);
+        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
 
         // Store the reference to the start of the code in 0xFFFC
         self.mem_write_u16(0xFFFC, 0x0600);
@@ -249,8 +261,8 @@ impl Cpu {
     fn bug_mem_read_wraparound(&self, address: u16) -> u16 {
         let a = address;
         let b = (a & 0xFF00) | ((a as u8).wrapping_add(1) as u16);
-        let lo= self.mem_read(a);
-        let hi= self.mem_read(b);
+        let lo = self.mem_read(a);
+        let hi = self.mem_read(b);
 
         (hi as u16) << 8 | (lo as u16)
     }
@@ -280,7 +292,7 @@ impl Cpu {
                 let address_bugged = self.bug_mem_read_wraparound(target);
 
                 address_bugged
-            },
+            }
             // Indirect addressing
             AddressingMode::IND => {
                 let target = self.mem_read_u16(pc_next);
@@ -288,7 +300,7 @@ impl Cpu {
                 let address_bugged = self.bug_mem_read_wraparound(target);
 
                 address_bugged
-            },
+            }
             // Indirect Indexed addressing
             AddressingMode::IDY => {
                 let base = self.mem_read(pc_next);
@@ -299,7 +311,7 @@ impl Cpu {
                 let deref = deref_base.wrapping_add(self.regs.y as u16);
 
                 deref
-            },
+            }
             // Relative addressing
             AddressingMode::REL => {
                 let offset = self.mem_read(pc_next) as u16;
@@ -308,7 +320,7 @@ impl Cpu {
                 } else {
                     pc_next + 1 + offset - 0x100
                 }
-            },
+            }
             // Zero Page addressing
             AddressingMode::ZPG => self.mem_read(pc_next) as u16,
             // Indexed Zero Page X addressing
@@ -597,6 +609,12 @@ impl Cpu {
         self.compare(self.regs.y, operand);
     }
 
+    /// DECs the contents of a memory location and then CMPs the result with the accumulator
+    fn dcp(&mut self, addr: u16) {
+        self.dec(addr);
+        self.cmp(addr);
+    }
+
     /// Decrement memory
     fn dec(&mut self, addr: u16) {
         let operand = self.mem_read(addr).wrapping_sub(1);
@@ -645,6 +663,12 @@ impl Cpu {
         self.regs.set_zn(self.regs.y);
     }
 
+    /// INCs the contents of a memory location and then SBCs the result from the accumulator
+    fn isb(&mut self, addr: u16) {
+        self.inc(addr);
+        self.sbc(addr);
+    }
+
     /// Jump
     fn jmp(&mut self, addr: u16) {
         self.pc = addr;
@@ -659,6 +683,14 @@ impl Cpu {
     fn jsr(&mut self, addr: u16) {
         self.push_u16(self.pc - 1);
         self.pc = addr;
+    }
+
+    /// Loads a byte of memory into the accumulator and x
+    fn lax(&mut self, addr: u16) {
+        let value = self.mem_read(addr);
+        self.regs.x = value;
+        self.regs.a = value;
+        self.regs.set_zn(value);
     }
 
     /// Load accumulator
@@ -702,9 +734,7 @@ impl Cpu {
     }
 
     /// No operation
-    fn nop(&self) {
-
-    }
+    fn nop(&self) {}
 
     /// Logical inclusive or
     fn ora(&mut self, addr: u16) {
@@ -792,6 +822,11 @@ impl Cpu {
     /// Return from subroutine
     fn rts(&mut self) {
         self.pc = self.pop_u16() + 1;
+    }
+
+    /// ANDs the contents of the accumulator and x register and stores the result in x
+    fn sax(&mut self, addr: u16) {
+        self.mem_write(addr, self.regs.a & self.regs.x);
     }
 
     /// Subtract with Carry
@@ -913,18 +948,6 @@ impl Cpu {
         panic!("Illegal opcode encountered: AXS");
     }
 
-    /// DECs the contents of a memory location and then CMPs the result with the A register
-    fn dcp(&mut self, addr: u16) {
-        self.dec(addr);
-        self.cmp(addr);
-    }
-
-    /// Illegal opcode: ISC
-    fn isb(&mut self, addr: u16) {
-        self.inc(addr);
-        self.sbc(addr);
-    }
-
     /// Illegal opcode: KIL
     fn kil(&self) {
         panic!("Illegal opcode encountered: KIL");
@@ -935,14 +958,6 @@ impl Cpu {
         panic!("Illegal opcode encountered: LAS");
     }
 
-    /// Loads a byte of memory into the accumulator and x
-    fn lax(&mut self, addr: u16) {
-        let value = self.mem_read(addr);
-        self.regs.x = value;
-        self.regs.a = value;
-        self.regs.set_zn(value);
-    }
-
     /// Illegal opcode: RLA
     fn rla(&self) {
         panic!("Illegal opcode encountered: RLA");
@@ -951,11 +966,6 @@ impl Cpu {
     /// Illegal opcode: RRA
     fn rra(&self) {
         panic!("Illegal opcode encountered: RRA");
-    }
-
-    /// Illegal opcode: SAX
-    fn sax(&mut self, addr: u16) {
-        self.mem_write(addr, self.regs.a & self.regs.x);
     }
 
     /// Illegal opcode: SHX
@@ -1002,8 +1012,8 @@ mod test {
         let rom_data = &test_rom[0x0010..0x4000];
         let rom_len = rom_data.len();
 
-        cpu.memory[0x0800 .. (0x0800 + rom_data.len())].copy_from_slice(rom_data);
-        cpu.memory[0xC000 .. (0xC000 + rom_data.len())].copy_from_slice(rom_data);
+        cpu.memory[0x0800..(0x0800 + rom_data.len())].copy_from_slice(rom_data);
+        cpu.memory[0xC000..(0xC000 + rom_data.len())].copy_from_slice(rom_data);
 
         cpu.regs.set_flags(0x24);
         cpu.sp = 0xFD;
@@ -1034,7 +1044,9 @@ mod test {
                 &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
                 &AddressingMode::ZPX => format!("{:02X}", byte_one),
                 &AddressingMode::ZPY => format!("{:02X}", byte_one),
-                &AddressingMode::ABS => format!("{:02X} {:02X}", address_bytes[0], address_bytes[1]),
+                &AddressingMode::ABS => {
+                    format!("{:02X} {:02X}", address_bytes[0], address_bytes[1])
+                }
                 &AddressingMode::ABX => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::ABY => format!("{:02X} {:02X}", byte_one, byte_two),
                 &AddressingMode::IND => format!("{:02X} {:02X}", byte_one, byte_two),
@@ -1044,7 +1056,9 @@ mod test {
                 &AddressingMode::REL => format!("{:02X}", rel_offset),
                 &AddressingMode::IDX => format!("{:02X}", byte_one),
                 &AddressingMode::IDY => format!("{:02X}", byte_one),
-                &AddressingMode::UNKNOWN => format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
+                &AddressingMode::UNKNOWN => {
+                    format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
+                }
             };
 
             let mnemonic_fmt = match addressing {
@@ -1052,16 +1066,28 @@ mod test {
                 &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, byte_one),
                 &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, byte_one),
                 &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
-                &AddressingMode::ABX => format!("{:?} ${:04X},X", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
-                &AddressingMode::ABY => format!("{:?} ${:04X},Y", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
-                &AddressingMode::IND => format!("{:?} (${:04X})", mnemonic, u16::from_le_bytes([byte_one, byte_two])),
+                &AddressingMode::ABX => format!(
+                    "{:?} ${:04X},X",
+                    mnemonic,
+                    u16::from_le_bytes([byte_one, byte_two])
+                ),
+                &AddressingMode::ABY => format!(
+                    "{:?} ${:04X},Y",
+                    mnemonic,
+                    u16::from_le_bytes([byte_one, byte_two])
+                ),
+                &AddressingMode::IND => format!(
+                    "{:?} (${:04X})",
+                    mnemonic,
+                    u16::from_le_bytes([byte_one, byte_two])
+                ),
                 &AddressingMode::IMP => format!("{:?}", mnemonic),
                 &AddressingMode::ACC => format!("{:?} A", mnemonic),
                 &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
                 &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, address),
                 &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, byte_one),
                 &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, byte_one),
-                &AddressingMode::UNKNOWN => format!("")
+                &AddressingMode::UNKNOWN => format!(""),
             };
 
             let mnemonic_illegal = match &opcodes::INSTRUCTION_ILLEGAL.contains(&opcode) {
@@ -1069,17 +1095,19 @@ mod test {
                 false => " ",
             };
 
-            write!(f, "{:04X}  {:02X} {: <5} {}{: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
-                   self.pc,
-                   opcode,
-                   bytes_fmt,
-                   mnemonic_illegal,
-                   mnemonic_fmt,
-                   self.regs.a,
-                   self.regs.x,
-                   self.regs.y,
-                   self.regs.get_flags(),
-                   self.sp
+            write!(
+                f,
+                "{:04X}  {:02X} {: <5} {}{: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+                self.pc,
+                opcode,
+                bytes_fmt,
+                mnemonic_illegal,
+                mnemonic_fmt,
+                self.regs.a,
+                self.regs.x,
+                self.regs.y,
+                self.regs.get_flags(),
+                self.sp
             )
         }
     }
