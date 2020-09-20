@@ -6565,7 +6565,7 @@ FAB1  24 01     BIT $01                         A:05 X:02 Y:FF P:A5 SP:F9
 FAB3  18        CLC                             A:05 X:02 Y:FF P:E5 SP:F9
 FAB4  A9 40     LDA #$40                        A:05 X:02 Y:FF P:E4 SP:F9
 FAB6  60        RTS                             A:40 X:02 Y:FF P:64 SP:F9
-EC97  F3 45    *ISB ($45),Y     48              A:40 X:02 Y:FF P:64 SP:FB
+EC97  F3 45    *ISB ($45),Y                     A:40 X:02 Y:FF P:64 SP:FB
 EC99  EA        NOP                             A:53 X:02 Y:FF P:24 SP:FB
 EC9A  EA        NOP                             A:53 X:02 Y:FF P:24 SP:FB
 EC9B  08        PHP                             A:53 X:02 Y:FF P:24 SP:FB

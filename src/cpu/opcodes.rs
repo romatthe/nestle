@@ -3,7 +3,7 @@ use crate::cpu::opcodes::AddressingMode::{
 };
 use crate::cpu::opcodes::Mnemonic::{
     ADC, AHX, ALR, ANC, AND, ARR, ASL, AXS, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
-    CLD, CLI, CLV, CMP, CPX, CPY, DCP, DEC, DEX, DEY, EOR, INC, INX, INY, ISC, JMP, JSR, KIL, LAS,
+    CLD, CLI, CLV, CMP, CPX, CPY, DCP, DEC, DEX, DEY, EOR, INC, INX, INY, ISB, JMP, JSR, KIL, LAS,
     LAX, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, RLA, ROL, ROR, RRA, RTI, RTS, SAX, SBC,
     SEC, SED, SEI, SHX, SHY, SLO, SRE, STA, STX, STY, TAS, TAX, TAY, TSX, TXA, TXS, TYA, XAA,
 };
@@ -17,7 +17,7 @@ pub const INSTRUCTION_SIZES: [u8; 256] = [
     2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
-    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 2, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
 ];
 
 /// Indicates the number of cycles used by each instruction
@@ -106,10 +106,10 @@ pub const INSTRUCTION_MNEMONIC: [Mnemonic; 256] = [
     INY, CMP, DEX, AXS, CPY, CMP, DEC, DCP,
     BNE, CMP, KIL, DCP, NOP, CMP, DEC, DCP,
     CLD, CMP, NOP, DCP, NOP, CMP, DEC, DCP,
-    CPX, SBC, NOP, ISC, CPX, SBC, INC, ISC,
-    INX, SBC, NOP, SBC, CPX, SBC, INC, ISC,
-    BEQ, SBC, KIL, ISC, NOP, SBC, INC, ISC,
-    SED, SBC, NOP, ISC, NOP, SBC, INC, ISC,
+    CPX, SBC, NOP, ISB, CPX, SBC, INC, ISB,
+    INX, SBC, NOP, SBC, CPX, SBC, INC, ISB,
+    BEQ, SBC, KIL, ISB, NOP, SBC, INC, ISB,
+    SED, SBC, NOP, ISB, NOP, SBC, INC, ISB,
 ];
 
 #[rustfmt::skip]
@@ -142,6 +142,6 @@ pub enum Mnemonic {
     CLC, CLD, CLI, CLV, CMP, CPX, CPY, SEC, SED, SEI,               // Registers
     PHA, PHP, PLA, PLP,                                             // Stack
     BRK, NOP,                                                       // System
-    KIL, SLO, ANC, RLA, SRE, ALR, RRA, SAX, XAA, AHX, LAX, DCP, ISC, ARR, AXS, TAS, SHY, SHX, LAS, // ?
+    KIL, SLO, ANC, RLA, SRE, ALR, RRA, SAX, XAA, AHX, LAX, DCP,ISB, ARR, AXS, TAS, SHY, SHX, LAS, // ?
     UNKNOWN
 }

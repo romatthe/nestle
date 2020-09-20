@@ -400,7 +400,7 @@ impl Cpu {
             Mnemonic::ARR => self.arr(),
             Mnemonic::AXS => self.axs(),
             Mnemonic::DCP => self.dcp(address),
-            Mnemonic::ISC => self.isc(),
+            Mnemonic::ISB => self.isb(address),
             Mnemonic::KIL => self.kil(),
             Mnemonic::LAS => self.las(),
             Mnemonic::LAX => self.lax(address),
@@ -920,8 +920,9 @@ impl Cpu {
     }
 
     /// Illegal opcode: ISC
-    fn isc(&self) {
-        panic!("Illegal opcode encountered: ISC");
+    fn isb(&mut self, addr: u16) {
+        self.inc(addr);
+        self.sbc(addr);
     }
 
     /// Illegal opcode: KIL
