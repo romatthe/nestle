@@ -416,7 +416,7 @@ impl Cpu {
             Mnemonic::KIL => self.kil(),
             Mnemonic::LAS => self.las(),
             Mnemonic::LAX => self.lax(address),
-            Mnemonic::RLA => self.rla(),
+            Mnemonic::RLA => self.rla(address),
             Mnemonic::RRA => self.rra(),
             Mnemonic::SAX => self.sax(address),
             Mnemonic::SHX => self.shx(),
@@ -964,9 +964,10 @@ impl Cpu {
         panic!("Illegal opcode encountered: LAS");
     }
 
-    /// Illegal opcode: RLA
-    fn rla(&self) {
-        panic!("Illegal opcode encountered: RLA");
+    /// ROLs the contents of a memory location and then ANDs the result with the accumulator
+    fn rla(&mut self, addr: u16) {
+        self.rol(addr);
+        self.and(addr);
     }
 
     /// Illegal opcode: RRA
