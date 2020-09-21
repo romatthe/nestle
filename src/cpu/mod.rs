@@ -422,7 +422,7 @@ impl Cpu {
             Mnemonic::SHX => self.shx(),
             Mnemonic::SHY => self.shy(),
             Mnemonic::SLO => self.slo(address),
-            Mnemonic::SRE => self.sre(),
+            Mnemonic::SRE => self.sre(address),
             Mnemonic::TAS => self.tas(),
             Mnemonic::XAA => self.xaa(),
 
@@ -885,6 +885,12 @@ impl Cpu {
         self.ora(addr);
     }
 
+    /// LSRs the contents of a memory location and then EORs the result with the accumulator
+    fn sre(&mut self, addr: u16) {
+        self.lsr(addr);
+        self.eor(addr);
+    }
+
     /// Store accumulator
     fn sta(&mut self, addr: u16) {
         self.mem_write(addr, self.regs.a);
@@ -983,11 +989,6 @@ impl Cpu {
     /// Illegal opcode: SHY
     fn shy(&self) {
         panic!("Illegal opcode encountered: SHY");
-    }
-
-    /// Illegal opcode: SRE
-    fn sre(&self) {
-        panic!("Illegal opcode encountered: SRE");
     }
 
     /// Illegal opcode: TAS
