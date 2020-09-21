@@ -770,6 +770,12 @@ impl Cpu {
         self.regs.u = 1;
     }
 
+    /// ROLs the contents of a memory location and then ANDs the result with the accumulator
+    fn rla(&mut self, addr: u16) {
+        self.rol(addr);
+        self.and(addr);
+    }
+
     /// Rotate left
     fn rol(&mut self, addr: u16) {
         let operand = self.mem_read(addr);
@@ -962,12 +968,6 @@ impl Cpu {
     /// Illegal opcode: LAS
     fn las(&self) {
         panic!("Illegal opcode encountered: LAS");
-    }
-
-    /// ROLs the contents of a memory location and then ANDs the result with the accumulator
-    fn rla(&mut self, addr: u16) {
-        self.rol(addr);
-        self.and(addr);
     }
 
     /// Illegal opcode: RRA
