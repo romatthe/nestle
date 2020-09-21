@@ -417,7 +417,7 @@ impl Cpu {
             Mnemonic::LAS => self.las(),
             Mnemonic::LAX => self.lax(address),
             Mnemonic::RLA => self.rla(address),
-            Mnemonic::RRA => self.rra(),
+            Mnemonic::RRA => self.rra(address),
             Mnemonic::SAX => self.sax(address),
             Mnemonic::SHX => self.shx(),
             Mnemonic::SHY => self.shy(),
@@ -813,6 +813,12 @@ impl Cpu {
         self.regs.set_zn(self.regs.a);
     }
 
+    /// RORs the contents of a memory location and then ADCs the result with the accumulator
+    fn rra(&mut self, addr: u16) {
+        self.ror(addr);
+        self.adc(addr);
+    }
+
     /// Return from interrupt
     fn rti(&mut self) {
         // Pull the status flags from the stack
@@ -976,11 +982,6 @@ impl Cpu {
         panic!("Illegal opcode encountered: LAS");
     }
 
-    /// Illegal opcode: RRA
-    fn rra(&self) {
-        panic!("Illegal opcode encountered: RRA");
-    }
-
     /// Illegal opcode: SHX
     fn shx(&self) {
         panic!("Illegal opcode encountered: SHX");
@@ -1024,7 +1025,6 @@ mod test {
 
         for result in test_results {
             let actual = cpu.to_string();
-            println!("{}", actual);
             assert_eq!(actual, result);
             cpu.step();
         }
