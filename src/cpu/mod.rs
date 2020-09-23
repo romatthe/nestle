@@ -146,8 +146,6 @@ pub struct Cpu {
     memory: [u8; 0xFFFF],
     /// CPU should exit when set to `false`
     running: bool,
-    // Mark if branched, and if so, which address is being branched to
-    // branched: Option<u16>,
 }
 
 impl Cpu {
