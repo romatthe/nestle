@@ -1,4 +1,4 @@
-use crate::cpu::bus::Bus;
+use crate::cpu::bus::{Bus, Memory};
 use crate::cpu::opcodes::{AddressingMode, Mnemonic, INSTRUCTION_SIZES};
 use bitflags::_core::fmt::Formatter;
 use log::warn;
@@ -133,7 +133,7 @@ impl Registers {
 }
 
 const STACK_OFFSET: u16 = 0x0100;
-const STACK_RESET: u8 = 0xfd;
+const STACK_RESET: u8 = 0xFD;
 
 pub struct Cpu {
     /// Program counter
@@ -142,10 +142,10 @@ pub struct Cpu {
     pub sp: u8,
     /// Registers
     pub regs: Registers,
-    /// RAM
-    memory: [u8; 0xFFFF],
     /// CPU should exit when set to `false`
     running: bool,
+    /// Provides access to shared memory bus
+    bus: Bus,
 }
 
 impl Cpu {
@@ -154,8 +154,8 @@ impl Cpu {
             pc: 0,
             sp: STACK_RESET,
             regs: Registers::new(),
-            memory: [0x0; 0xFFFF],
             running: true,
+            bus: Bus::new(),
         }
     }
 
@@ -205,22 +205,19 @@ impl Cpu {
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.bus.read(addr)
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
+        self.bus.write(addr, data);
     }
 
     pub fn mem_read_u16(&self, addr: u16) -> u16 {
-        u16::from_le_bytes([self.mem_read(addr), self.mem_read(addr + 1)])
+        self.bus.read_u16(addr)
     }
 
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
-        let hi = (data >> 8) as u8;
-        let lo = (data & 0xFF) as u8;
-        self.mem_write(addr, lo);
-        self.mem_write(addr + 1, hi);
+        self.bus.write_u16(addr, data);
     }
 
     /// Push a byte unto the stack
@@ -231,8 +228,9 @@ impl Cpu {
 
     /// Push two bytes unto the stack
     fn push_u16(&mut self, value: u16) {
-        self.push_u8((value >> 8) as u8);
-        self.push_u8((value & 0xFF) as u8);
+        let [one, two] = value.to_le_bytes();
+        self.push_u8(two);
+        self.push_u8(one);
     }
 
     /// Pop a byte off the stack
@@ -243,13 +241,15 @@ impl Cpu {
 
     /// Pop two bytes off the stack
     fn pop_u16(&mut self) -> u16 {
-        let lo = self.pop_u8() as u16;
-        let hi = self.pop_u8() as u16;
-        hi << 8 | lo
+        let lo = self.pop_u8();
+        let hi = self.pop_u8();
+        u16::from_le_bytes([lo, hi])
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
+        for pos in 0..(program.len() as u16) {
+            self.mem_write(0x0600 + pos, program[pos as usize]);
+        }
 
         // Store the reference to the start of the code in 0xFFFC
         self.mem_write_u16(0xFFFC, 0x0600);
@@ -262,7 +262,7 @@ impl Cpu {
         let lo = self.mem_read(a);
         let hi = self.mem_read(b);
 
-        (hi as u16) << 8 | (lo as u16)
+        u16::from_le_bytes([lo, hi])
     }
 
     /// Get the address of the next operand based on the addressing mode
@@ -1014,16 +1014,20 @@ mod test {
         let rom_data = &test_rom[0x0010..0x4000];
         let rom_len = rom_data.len();
 
-        cpu.memory[0x0800..(0x0800 + rom_data.len())].copy_from_slice(rom_data);
-        cpu.memory[0xC000..(0xC000 + rom_data.len())].copy_from_slice(rom_data);
+        for pos in 0x8000..(0x8000 + rom_len) {
+            cpu.mem_write(pos as u16, rom_data[(pos - 0x8000) as usize]);
+        }
+
+        for pos in 0xC000..(0xC000 + rom_len) {
+            cpu.mem_write(pos as u16, rom_data[(pos - 0xC000) as usize]);
+        }
 
         cpu.regs.set_flags(0x24);
         cpu.sp = 0xFD;
         cpu.pc = 0xC000;
 
         for result in test_results {
-            let actual = cpu.to_string();
-            assert_eq!(actual, result);
+            assert_eq!(cpu.to_string(), result);
             cpu.step();
         }
     }
