@@ -1,16 +1,14 @@
 use crate::cartridge::Cartridge;
-use crate::cpu;
-use crate::cpu::opcodes::{AddressingMode, Mnemonic};
-use crate::cpu::Cpu;
+use crate::cpu::CPU;
 
 pub struct Console {
-    cpu: Cpu,
+    cpu: CPU,
 }
 
 impl Console {
     pub fn new(cart: Cartridge) -> Self {
         Console {
-            cpu: Cpu::new(cart),
+            cpu: CPU::new(cart),
         }
     }
 }

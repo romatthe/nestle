@@ -1,6 +1,4 @@
-use crate::console::Console;
-use crate::cpu::Cpu;
-use rand::Rng;
+use crate::cpu::CPU;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
@@ -9,6 +7,7 @@ use sdl2::EventPump;
 mod cartridge;
 mod console;
 mod cpu;
+mod ppu;
 
 fn main() {
     // let snake_program = vec![
@@ -80,7 +79,7 @@ fn main() {
     // });
 }
 
-fn read_screen_state(cpu: &Cpu, frame: &mut [u8; 32 * 3 * 32]) -> bool {
+fn read_screen_state(cpu: &CPU, frame: &mut [u8; 32 * 3 * 32]) -> bool {
     let mut frame_idx = 0;
     let mut update = false;
 
@@ -102,7 +101,7 @@ fn read_screen_state(cpu: &Cpu, frame: &mut [u8; 32 * 3 * 32]) -> bool {
 }
 
 /// Handles keyboard input and writes the state of the keys pressed to the NES memory
-fn handle_input(cpu: &mut Cpu, event_pump: &mut EventPump) {
+fn handle_input(cpu: &mut CPU, event_pump: &mut EventPump) {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. }

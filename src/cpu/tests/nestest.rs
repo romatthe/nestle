@@ -1,6 +1,6 @@
 use crate::cartridge::Cartridge;
 use crate::cpu::opcodes::AddressingMode;
-use crate::cpu::{opcodes, Cpu};
+use crate::cpu::{opcodes, CPU};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -10,7 +10,7 @@ fn verify_nestest() {
     let test_results = include_str!("../../../test-roms/nestest-results.txt").lines();
     let cart = Cartridge::from_raw(&test_rom).unwrap();
 
-    let mut cpu = Cpu::new(cart);
+    let mut cpu = CPU::new(cart);
 
     // The NESTEST reset vector points to 0xC004, but it has an automated run mode if you point
     // the program counter to 0xC000, which is what we want to use in this test
@@ -23,16 +23,15 @@ fn verify_nestest() {
     }
 
     // Read bytes from 0x02 and 0x03 from memory to get an error code, 0x0000 indicates success
-    let result = cpu.mem_read_u16(0x0002);
     assert_eq!(
-        result,
+        cpu.mem_read_u16(0x0002),
         0x0000,
         "NESTEST failed: {}",
         super::NESTEST_ERRORS[&result]
     );
 }
 
-impl fmt::Display for Cpu {
+impl fmt::Display for CPU {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let opcode = self.mem_read(self.pc);
         let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];

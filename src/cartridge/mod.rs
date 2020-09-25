@@ -11,9 +11,9 @@ const CHR_ROM_PAGE_SIZE: usize = 0x2000;
 /// A cartridge and its corresponding ROM data.
 pub enum Cartridge {
     /// A cartridge with ROM data from a file in the iNES format.
-    iNES(NesRom),
+    iNES(ROM),
     /// A cartridge with ROM data from a file in the NES2.0 format.
-    NES2(NesRom),
+    NES2(ROM),
 }
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub enum Mirroring {
     FourScreen,
 }
 
-pub struct NesRom {
+pub struct ROM {
     /// Data of the ROM memory connected to the CPU.
     pub prg: Vec<u8>,
     /// Data of the ROM memory connected to the PPU.
@@ -70,7 +70,7 @@ impl Cartridge {
         let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
         let chr_rom_start = prg_rom_start + prg_rom_size;
 
-        let rom = NesRom {
+        let rom = ROM {
             prg: raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec(),
             chr: raw[chr_rom_start..(chr_rom_start + chr_rom_size)].to_vec(),
             mapper,

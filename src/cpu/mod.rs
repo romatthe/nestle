@@ -42,7 +42,8 @@ impl StatusRegister {
     }
 }
 
-pub struct Registers {
+/// The NES CPU status register and three special purpose registers
+struct Registers {
     /// Accumulator
     pub a: u8,
     /// X register
@@ -138,22 +139,23 @@ impl Registers {
 const STACK_OFFSET: u16 = 0x0100;
 const STACK_RESET: u8 = 0xFD;
 
-pub struct Cpu {
+/// The NES 2A03 Central Processing Unit
+pub struct CPU {
     /// Program counter
     pub pc: u16,
     /// Stack pointer
     pub sp: u8,
     /// Registers
-    pub regs: Registers,
+    regs: Registers,
     /// CPU should exit when set to `false`
     running: bool,
     /// Provides access to shared memory bus
     bus: Bus,
 }
 
-impl Cpu {
+impl CPU {
     pub fn new(cart: Cartridge) -> Self {
-        Cpu {
+        CPU {
             pc: 0,
             sp: STACK_RESET,
             regs: Registers::new(),
@@ -180,7 +182,7 @@ impl Cpu {
 
     pub fn run_with_callback<F>(&mut self, mut callback: F)
     where
-        F: FnMut(&mut Cpu),
+        F: FnMut(&mut CPU),
     {
         while self.running {
             let opcode = self.mem_read(self.pc);

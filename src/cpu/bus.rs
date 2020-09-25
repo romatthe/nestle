@@ -1,5 +1,5 @@
 use crate::cartridge::Cartridge::{iNES, NES2};
-use crate::cartridge::{Cartridge, NesRom};
+use crate::cartridge::{Cartridge, ROM};
 
 macro_rules! mem_range_ram {
     () => {
@@ -29,7 +29,7 @@ pub trait Memory {
 
 pub struct Bus {
     ram: [u8; 2048],
-    rom: NesRom,
+    rom: ROM,
 }
 
 impl Bus {
