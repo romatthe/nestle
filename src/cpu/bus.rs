@@ -1,3 +1,6 @@
+use crate::cartridge::{Cartridge, NesRom};
+use crate::cartridge::Cartridge::{iNES, NES2};
+
 macro_rules! mem_range_ram {
     () => {
         0x0000..=0x1FFF
@@ -10,7 +13,7 @@ macro_rules! mem_range_ppu {
 }
 macro_rules! mem_range_rom {
     () => {
-        0x4020..=0xFFFF
+        0x8000..=0xFFFF
     };
 }
 
@@ -26,15 +29,34 @@ pub trait Memory {
 
 pub struct Bus {
     ram: [u8; 2048],
-    rom: [u8; 0xBFE0],
+    rom: NesRom,
 }
 
 impl Bus {
-    pub fn new() -> Self {
+    pub fn new(cart: Cartridge) -> Self {
+        let rom = match cart {
+            iNES(r) => r,
+            NES2(r) => r,
+        };
+
         Bus {
             ram: [0; 2048],
-            rom: [0; 0xBFE0],
+            rom,
         }
+    }
+}
+
+impl Bus {
+    fn read_from_prg(&self, addr: u16) -> u8 {
+        let prg_addr = if self.rom.prg.len() == 0x4000 && addr >= 0x4000 {
+            // Mirror the address if needed
+            (addr - 0x8000) % 0x4000
+        } else {
+            // Get the address in the actual PRG ROM
+            (addr - 0x8000)
+        };
+
+        self.rom.prg[prg_addr as usize]
     }
 }
 
@@ -48,10 +70,7 @@ impl Memory for Bus {
                 self.ram[addr_mirrored as usize]
             }
             mem_range_ppu!() => todo!("PPU needs to be implemented!"),
-            mem_range_rom!() => {
-                // TODO: Quick hack
-                self.rom[(addr - 0x4020) as usize]
-            }
+            mem_range_rom!() => self.read_from_prg(addr),
             _ => {
                 println!("Ignoring memory read at 0x{:04X}", addr);
                 0
@@ -68,10 +87,7 @@ impl Memory for Bus {
                 self.ram[addr_mirrored as usize] = data;
             }
             mem_range_ppu!() => todo!("PPU is not supported yet"),
-            mem_range_rom!() => {
-                // TODO: Quick hack
-                self.rom[(addr - 0x4020) as usize] = data;
-            }
+            mem_range_rom!() => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
                 println!("Ignoring memory write at 0x{:04X}", addr);
             }

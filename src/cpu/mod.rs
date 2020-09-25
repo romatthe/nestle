@@ -1,9 +1,12 @@
 use crate::cpu::bus::{Bus, Memory};
 use crate::cpu::opcodes::{AddressingMode, Mnemonic, INSTRUCTION_SIZES};
-use bitflags::_core::fmt::Formatter;
 use log::warn;
 use std::collections::HashMap;
 use std::fmt;
+use crate::cartridge::Cartridge;
+
+#[cfg(test)]
+mod tests;
 
 pub mod bus;
 pub mod opcodes;
@@ -149,13 +152,13 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(cart: Cartridge) -> Self {
         Cpu {
             pc: 0,
             sp: STACK_RESET,
             regs: Registers::new(),
             running: true,
-            bus: Bus::new(),
+            bus: Bus::new(cart),
         }
     }
 
@@ -998,122 +1001,5 @@ impl Cpu {
     /// Illegal opcode: XAA
     fn xaa(&self) {
         panic!("Illegal opcode encountered: XAA");
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn verify_nestest() {
-        let mut cpu = Cpu::new();
-        let test_rom = include_bytes!("../../test-roms/nestest.nes").to_vec();
-        let test_results = include_str!("../../test-roms/nestest-results.txt").lines();
-
-        let rom_data = &test_rom[0x0010..0x4000];
-        let rom_len = rom_data.len();
-
-        for pos in 0x8000..(0x8000 + rom_len) {
-            cpu.mem_write(pos as u16, rom_data[(pos - 0x8000) as usize]);
-        }
-
-        for pos in 0xC000..(0xC000 + rom_len) {
-            cpu.mem_write(pos as u16, rom_data[(pos - 0xC000) as usize]);
-        }
-
-        cpu.regs.set_flags(0x24);
-        cpu.sp = 0xFD;
-        cpu.pc = 0xC000;
-
-        for result in test_results {
-            assert_eq!(cpu.to_string(), result);
-            cpu.step();
-        }
-    }
-
-    impl fmt::Display for Cpu {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            let opcode = self.mem_read(self.pc);
-            let byte_one = self.mem_read(self.pc + 1);
-            let byte_two = self.mem_read(self.pc + 2);
-            let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
-            let addressing = &opcodes::INSTRUCTION_MODES[opcode as usize];
-            let address = self.get_next_operand_address(addressing);
-            let operand = self.mem_read_u16(address);
-            let address_bytes = u16::to_le_bytes(address);
-            let operand_bytes = u16::to_le_bytes(operand);
-            let rel_offset = self.mem_read(self.pc + 1);
-
-            let bytes_fmt = match addressing {
-                &AddressingMode::ZPG => format!("{:02X}", address_bytes[0]),
-                &AddressingMode::ZPX => format!("{:02X}", byte_one),
-                &AddressingMode::ZPY => format!("{:02X}", byte_one),
-                &AddressingMode::ABS => {
-                    format!("{:02X} {:02X}", address_bytes[0], address_bytes[1])
-                }
-                &AddressingMode::ABX => format!("{:02X} {:02X}", byte_one, byte_two),
-                &AddressingMode::ABY => format!("{:02X} {:02X}", byte_one, byte_two),
-                &AddressingMode::IND => format!("{:02X} {:02X}", byte_one, byte_two),
-                &AddressingMode::IMP => format!(""),
-                &AddressingMode::ACC => format!(""),
-                &AddressingMode::IMM => format!("{:02X}", operand_bytes[0]),
-                &AddressingMode::REL => format!("{:02X}", rel_offset),
-                &AddressingMode::IDX => format!("{:02X}", byte_one),
-                &AddressingMode::IDY => format!("{:02X}", byte_one),
-                &AddressingMode::UNKNOWN => {
-                    format!("{:02X} {:02X}", operand_bytes[0], operand_bytes[1])
-                }
-            };
-
-            let mnemonic_fmt = match addressing {
-                &AddressingMode::ZPG => format!("{:?} ${:02X}", mnemonic, address_bytes[0]),
-                &AddressingMode::ZPX => format!("{:?} ${:02X},X", mnemonic, byte_one),
-                &AddressingMode::ZPY => format!("{:?} ${:02X},Y", mnemonic, byte_one),
-                &AddressingMode::ABS => format!("{:?} ${:04X}", mnemonic, address),
-                &AddressingMode::ABX => format!(
-                    "{:?} ${:04X},X",
-                    mnemonic,
-                    u16::from_le_bytes([byte_one, byte_two])
-                ),
-                &AddressingMode::ABY => format!(
-                    "{:?} ${:04X},Y",
-                    mnemonic,
-                    u16::from_le_bytes([byte_one, byte_two])
-                ),
-                &AddressingMode::IND => format!(
-                    "{:?} (${:04X})",
-                    mnemonic,
-                    u16::from_le_bytes([byte_one, byte_two])
-                ),
-                &AddressingMode::IMP => format!("{:?}", mnemonic),
-                &AddressingMode::ACC => format!("{:?} A", mnemonic),
-                &AddressingMode::IMM => format!("{:?} #${:02X}", mnemonic, operand_bytes[0]),
-                &AddressingMode::REL => format!("{:?} ${:04X}", mnemonic, address),
-                &AddressingMode::IDX => format!("{:?} (${:02X},X)", mnemonic, byte_one),
-                &AddressingMode::IDY => format!("{:?} (${:02X}),Y", mnemonic, byte_one),
-                &AddressingMode::UNKNOWN => format!(""),
-            };
-
-            let mnemonic_illegal = match &opcodes::INSTRUCTION_ILLEGAL.contains(&opcode) {
-                true => "*",
-                false => " ",
-            };
-
-            write!(
-                f,
-                "{:04X}  {:02X} {: <5} {}{: <31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
-                self.pc,
-                opcode,
-                bytes_fmt,
-                mnemonic_illegal,
-                mnemonic_fmt,
-                self.regs.a,
-                self.regs.x,
-                self.regs.y,
-                self.regs.get_flags(),
-                self.sp
-            )
-        }
     }
 }
