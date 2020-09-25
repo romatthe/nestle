@@ -85,8 +85,8 @@ impl Memory for Bus {
     }
 
     fn write_u16(&mut self, addr: u16, data: u16) {
-        let bytes = data.to_le_bytes();
-        self.write(addr, bytes[0]);
-        self.write(addr + 1, bytes[1]);
+        let [one, two] = data.to_le_bytes();
+        self.write(addr, one);
+        self.write(addr + 1, two);
     }
 }
