@@ -23,8 +23,9 @@ fn verify_nestest() {
     }
 
     // Read bytes from 0x02 and 0x03 from memory to get an error code, 0x0000 indicates success
+    let result = cpu.mem_read_u16(0x0002);
     assert_eq!(
-        cpu.mem_read_u16(0x0002),
+        result,
         0x0000,
         "NESTEST failed: {}",
         super::NESTEST_ERRORS[&result]

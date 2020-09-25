@@ -1,21 +1,12 @@
 use crate::cartridge::Cartridge::{iNES, NES2};
 use crate::cartridge::{Cartridge, ROM};
 
-macro_rules! mem_range_ram {
-    () => {
-        0x0000..=0x1FFF
-    };
-}
-macro_rules! mem_range_ppu {
-    () => {
-        0x2000..=0x3FFF
-    };
-}
-macro_rules! mem_range_rom {
-    () => {
-        0x8000..=0xFFFF
-    };
-}
+const MEM_RAM_A: u16 = 0x0000;
+const MEM_RAM_Z: u16 = 0x1FFF;
+const MEM_PPU_A: u16 = 0x2000;
+const MEM_PPU_Z: u16 = 0x3FFF;
+const MEM_ROM_A: u16 = 0x8000;
+const MEM_ROM_Z: u16 = 0xFFFF;
 
 pub trait Memory {
     fn read(&self, addr: u16) -> u8;
@@ -47,6 +38,20 @@ impl Bus {
 }
 
 impl Bus {
+    fn read_from_ram(&self, addr: u16) -> u8 {
+        // Due to mirroring in the RAM, only 11 of the 13 bits of the address are used
+        // https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring
+        let addr_mirrored = addr & 0b0111_1111_1111;
+        self.ram[addr_mirrored as usize]
+    }
+
+    fn write_to_ram(&mut self, addr: u16, data: u8) {
+        // Due to mirroring in the RAM, only 11 of the 13 bits of the address are used
+        // https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring
+        let addr_mirrored = addr & 0b0111_1111_1111;
+        self.ram[addr_mirrored as usize] = data;
+    }
+
     fn read_from_prg(&self, addr: u16) -> u8 {
         let prg_addr = if self.rom.prg.len() == 0x4000 && addr >= 0x4000 {
             // Mirror the address if needed
@@ -63,14 +68,9 @@ impl Bus {
 impl Memory for Bus {
     fn read(&self, addr: u16) -> u8 {
         match addr {
-            mem_range_ram!() => {
-                // Due to mirroring in the RAM, only 11 of the 13 bits of the address are used
-                // https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring
-                let addr_mirrored = addr & 0b0111_1111_1111;
-                self.ram[addr_mirrored as usize]
-            }
-            mem_range_ppu!() => todo!("PPU needs to be implemented!"),
-            mem_range_rom!() => self.read_from_prg(addr),
+            MEM_RAM_A ..= MEM_RAM_Z => self.read_from_ram(addr),
+            MEM_PPU_A ..= MEM_PPU_Z => todo!("PPU needs to be implemented!"),
+            MEM_ROM_A ..= MEM_ROM_Z => self.read_from_prg(addr),
             _ => {
                 println!("Ignoring memory read at 0x{:04X}", addr);
                 0
@@ -80,14 +80,9 @@ impl Memory for Bus {
 
     fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            mem_range_ram!() => {
-                // Due to mirroring in the RAM, only 11 of the 13 bits of the address are used
-                // https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring
-                let addr_mirrored = addr & 0b0111_1111_1111;
-                self.ram[addr_mirrored as usize] = data;
-            }
-            mem_range_ppu!() => todo!("PPU is not supported yet"),
-            mem_range_rom!() => panic!("Attempt to write to Cartridge ROM space"),
+            MEM_RAM_A ..= MEM_RAM_Z => self.write_to_ram(addr, data),
+            MEM_PPU_A ..= MEM_PPU_Z => todo!("PPU is not supported yet"),
+            MEM_ROM_A ..= MEM_ROM_Z => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
                 println!("Ignoring memory write at 0x{:04X}", addr);
             }
