@@ -35,12 +35,11 @@ fn verify_nestest() {
 impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let opcode = self.mem_read(self.pc);
-        let [byte_one, byte_two] = u16::to_le_bytes(self.mem_read_u16(self.pc + 1));
         let mnemonic = &opcodes::INSTRUCTION_MNEMONIC[opcode as usize];
         let addressing = &opcodes::INSTRUCTION_MODES[opcode as usize];
         let address = self.get_next_operand_address(addressing);
         let operand = self.mem_read_u16(address);
-        // let address_bytes = u16::to_le_bytes(address);
+        let [byte_one, byte_two] = u16::to_le_bytes(self.mem_read_u16(self.pc + 1));
         let [addr_one, addr_two] = u16::to_le_bytes(address);
         let [oper_one, oper_two] = u16::to_le_bytes(operand);
         let rel_offset = self.mem_read(self.pc + 1);
