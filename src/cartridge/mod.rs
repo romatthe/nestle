@@ -80,4 +80,3 @@ impl Cartridge {
         Ok(iNES(rom))
     }
 }
-

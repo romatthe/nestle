@@ -1,7 +1,7 @@
 mod nestest;
 
-use std::collections::HashMap;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
 
 lazy_static! {
     static ref NESTEST_ERRORS: HashMap<u16, &'static str> = {
@@ -28,8 +28,14 @@ lazy_static! {
         m.insert(0x0013, "PHP/flags failure (misc bit states)");
         m.insert(0x0014, "PLP/flags failure (misc bit states)");
         m.insert(0x0015, "PLP/flags failure (misc bit states)");
-        m.insert(0x0016, "PHA/PLA failure (PLA didn't affect Z and N properly)");
-        m.insert(0x0017, "PHA/PLA failure (PLA didn't affect Z and N properly)");
+        m.insert(
+            0x0016,
+            "PHA/PLA failure (PLA didn't affect Z and N properly)",
+        );
+        m.insert(
+            0x0017,
+            "PHA/PLA failure (PLA didn't affect Z and N properly)",
+        );
         m.insert(0x0018, "ORA # failure");
         m.insert(0x0019, "ORA # failure");
         m.insert(0x001A, "AND # failure");
@@ -67,7 +73,10 @@ lazy_static! {
         m.insert(0x003A, "LDX # failure (didn't set N and Z correctly)");
         m.insert(0x003B, "LDY # failure (didn't set N and Z correctly)");
         m.insert(0x003C, "LDY # failure (didn't set N and Z correctly)");
-        m.insert(0x003D, "compare(s) stored the result in a register (whoops!)");
+        m.insert(
+            0x003D,
+            "compare(s) stored the result in a register (whoops!)",
+        );
         m.insert(0x0071, "SBC # failure");
         m.insert(0x0072, "SBC # failure");
         m.insert(0x0073, "SBC # failure");
@@ -76,15 +85,36 @@ lazy_static! {
         m.insert(0x003E, "INX/DEX/INY/DEY did something bad");
         m.insert(0x003F, "INY/DEY messed up overflow or carry");
         m.insert(0x0040, "INX/DEX messed up overflow or carry");
-        m.insert(0x0041, "TAY did something bad (changed wrong regs, messed up flags)");
-        m.insert(0x0042, "TAX did something bad (changed wrong regs, messed up flags)");
-        m.insert(0x0043, "TYA did something bad (changed wrong regs, messed up flags)");
-        m.insert(0x0044, "TXA did something bad (changed wrong regs, messed up flags)");
-        m.insert(0x0045, "TXS didn't set flags right, or TSX touched flags and it shouldn't have");
-        m.insert(0x0046, "wrong data popped, or data not in right location on stack");
+        m.insert(
+            0x0041,
+            "TAY did something bad (changed wrong regs, messed up flags)",
+        );
+        m.insert(
+            0x0042,
+            "TAX did something bad (changed wrong regs, messed up flags)",
+        );
+        m.insert(
+            0x0043,
+            "TYA did something bad (changed wrong regs, messed up flags)",
+        );
+        m.insert(
+            0x0044,
+            "TXA did something bad (changed wrong regs, messed up flags)",
+        );
+        m.insert(
+            0x0045,
+            "TXS didn't set flags right, or TSX touched flags and it shouldn't have",
+        );
+        m.insert(
+            0x0046,
+            "wrong data popped, or data not in right location on stack",
+        );
         m.insert(0x0047, "JSR didn't work as expected");
         m.insert(0x0048, "RTS/JSR shouldn't have affected flags");
-        m.insert(0x0049, "RTI/RTS didn't work right when return addys/data were manually pushed");
+        m.insert(
+            0x0049,
+            "RTI/RTS didn't work right when return addys/data were manually pushed",
+        );
         m.insert(0x004A, "LSR A  failed");
         m.insert(0x004B, "ASL A  failed");
         m.insert(0x004C, "ROR A  failed");
@@ -231,7 +261,10 @@ lazy_static! {
         m.insert(0x00E8, "DEC failure");
         m.insert(0x00E9, "DEC failure");
         m.insert(0x00EA, "LDA didn't load what it was supposed to");
-        m.insert(0x00EB, "read location should've wrapped around ffffh to 0000h");
+        m.insert(
+            0x00EB,
+            "read location should've wrapped around ffffh to 0000h",
+        );
         m.insert(0x00EC, "should've wrapped zeropage address");
         m.insert(0x00ED, "ORA failure");
         m.insert(0x00EE, "ORA failure");
@@ -258,7 +291,10 @@ lazy_static! {
         m.insert(0x0400, "SBC failure");
         m.insert(0x0500, "SBC failure");
         m.insert(0x0600, "STA failure");
-        m.insert(0x0700, "JMP () data reading didn't wrap properly (this fails on a 65C02)");
+        m.insert(
+            0x0700,
+            "JMP () data reading didn't wrap properly (this fails on a 65C02)",
+        );
         m.insert(0x0800, "LDY,X failure");
         m.insert(0x0900, "LDY,X failure");
         m.insert(0x0A00, "STY,X failure");

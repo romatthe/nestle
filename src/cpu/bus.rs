@@ -1,5 +1,5 @@
-use crate::cartridge::{Cartridge, NesRom};
 use crate::cartridge::Cartridge::{iNES, NES2};
+use crate::cartridge::{Cartridge, NesRom};
 
 macro_rules! mem_range_ram {
     () => {

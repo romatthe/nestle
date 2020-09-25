@@ -1,9 +1,9 @@
+use crate::cartridge::Cartridge;
 use crate::cpu::bus::{Bus, Memory};
 use crate::cpu::opcodes::{AddressingMode, Mnemonic, INSTRUCTION_SIZES};
 use log::warn;
 use std::collections::HashMap;
 use std::fmt;
-use crate::cartridge::Cartridge;
 
 #[cfg(test)]
 mod tests;
@@ -162,8 +162,7 @@ impl Cpu {
         }
     }
 
-    pub fn run(&mut self, program: Vec<u8>) {
-        self.load(program);
+    pub fn run(&mut self) {
         self.reset();
 
         while self.running {

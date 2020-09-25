@@ -1,7 +1,7 @@
+use crate::cartridge::Cartridge;
 use crate::cpu;
 use crate::cpu::opcodes::{AddressingMode, Mnemonic};
 use crate::cpu::Cpu;
-use crate::cartridge::Cartridge;
 
 pub struct Console {
     cpu: Cpu,
