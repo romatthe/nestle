@@ -1,3 +1,3 @@
-# Nestle
+# Nestlé
 
 Work in progress!
